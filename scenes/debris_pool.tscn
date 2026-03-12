@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dxecwmg35mjw5"]
+
+[ext_resource type="Script" uid="uid://dx2bubacyl7py" path="res://scenes/node_3d.tscn.gd" id="1_5u55g"]
+
+[node name="DebrisPool" type="Node" unique_id=1496365549]
+script = ExtResource("1_5u55g")

@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://b0xitm3xf7f87"]
+
+[ext_resource type="PackedScene" uid="uid://bf8tffyox2ic3" path="res://assets/models/character-a.glb" id="1_4flbx"]
+[ext_resource type="Texture2D" uid="uid://b3ui47xjnu27g" path="res://assets/models/texture-a.png" id="2_onrkg"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i3pqv"]
+albedo_texture = ExtResource("2_onrkg")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hqtel"]
+albedo_texture = ExtResource("2_onrkg")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sweqy"]
+albedo_texture = ExtResource("2_onrkg")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2hs0m"]
+albedo_texture = ExtResource("2_onrkg")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1jxqw"]
+albedo_texture = ExtResource("2_onrkg")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dw050"]
+albedo_texture = ExtResource("2_onrkg")
+
+[node name="character-a2" unique_id=861182048 instance=ExtResource("1_4flbx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="leg-left" parent="Skeleton3D/leg-left" parent_id_path=PackedInt32Array(1857082106) index="0" unique_id=298938967]
+surface_material_override/0 = SubResource("StandardMaterial3D_i3pqv")
+
+[node name="leg-right" parent="Skeleton3D/leg-right" parent_id_path=PackedInt32Array(1863852671) index="0" unique_id=983616499]
+surface_material_override/0 = SubResource("StandardMaterial3D_hqtel")
+
+[node name="torso" parent="Skeleton3D/torso" parent_id_path=PackedInt32Array(694576916) index="0" unique_id=1059902651]
+surface_material_override/0 = SubResource("StandardMaterial3D_sweqy")
+
+[node name="arm-left" parent="Skeleton3D/arm-left" parent_id_path=PackedInt32Array(1850086934) index="0" unique_id=1644578563]
+surface_material_override/0 = SubResource("StandardMaterial3D_2hs0m")
+
+[node name="arm-right" parent="Skeleton3D/arm-right" parent_id_path=PackedInt32Array(655753807) index="0" unique_id=1616989370]
+surface_material_override/0 = SubResource("StandardMaterial3D_1jxqw")
+
+[node name="head" parent="Skeleton3D/head" parent_id_path=PackedInt32Array(850857445) index="0" unique_id=336966563]
+surface_material_override/0 = SubResource("StandardMaterial3D_dw050")

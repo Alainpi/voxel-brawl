@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://2tu0eqvbypog"]
+
+[ext_resource type="Script" uid="uid://c7ovhwiiuxggm" path="res://node_3d.gd" id="1_nd71p"]
+[ext_resource type="PackedScene" uid="uid://dtadyc3unam5r" path="res://scenes/dummy.tscn" id="3_nd71p"]
+[ext_resource type="Script" uid="uid://dx2bubacyl7py" path="res://scenes/node_3d.tscn.gd" id="3_qjeyg"]
+[ext_resource type="PackedScene" uid="uid://usaygrv80ckp" path="res://scenes/player.tscn" id="5_qjeyg"]
+[ext_resource type="Script" uid="uid://dwijm5k3mpi1n" path="res://scripts/player.gd" id="6_3qnke"]
+[ext_resource type="PackedScene" uid="uid://bsbe3km083ghw" path="res://template_floor_big_2.tscn" id="6_wtsjf"]
+[ext_resource type="PackedScene" uid="uid://bpikjg7p307ys" path="res://hud.tscn" id="7_wtsjf"]
+
+[node name="test_scene" type="Node3D" unique_id=114047288]
+script = ExtResource("1_nd71p")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=668482455]
+transform = Transform3D(-1, 7.036605e-08, -5.1878327e-08, 0, 0.5934189, 0.8048938, 8.742278e-08, 0.8048938, -0.5934189, 0, 5, -3)
+
+[node name="DebrisPool" type="Node" parent="." unique_id=1513902968]
+script = ExtResource("3_qjeyg")
+
+[node name="Dummy" parent="." unique_id=253904822 instance=ExtResource("3_nd71p")]
+
+[node name="DirectionalLight3D2" type="DirectionalLight3D" parent="." unique_id=1179555453]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6570704, 7.619619)
+
+[node name="Player" parent="." unique_id=1553557232 instance=ExtResource("5_qjeyg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6837044, 0, 0.9321759)
+script = ExtResource("6_3qnke")
+
+[node name="template-floor-big2" parent="." unique_id=406692530 instance=ExtResource("6_wtsjf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -4)
+
+[node name="template-floor-big3" parent="." unique_id=1237673445 instance=ExtResource("6_wtsjf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 4)
+
+[node name="template-floor-big4" parent="." unique_id=878964463 instance=ExtResource("6_wtsjf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 4)
+
+[node name="template-floor-big5" parent="." unique_id=1595055600 instance=ExtResource("6_wtsjf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -4)
+
+[node name="hud" parent="." unique_id=1660840369 instance=ExtResource("7_wtsjf")]

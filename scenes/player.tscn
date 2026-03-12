@@ -1,0 +1,65 @@
+[gd_scene format=3 uid="uid://usaygrv80ckp"]
+
+[ext_resource type="PackedScene" uid="uid://b0xitm3xf7f87" path="res://player.tscn" id="1_3vyb7"]
+[ext_resource type="Script" uid="uid://cpyeqj6epvfo8" path="res://scripts/weapon_melee.gd" id="2_g2els"]
+[ext_resource type="Script" uid="uid://qhdei3weau1p" path="res://scripts/weapon_ranged.gd" id="3_qhqgy"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_g2els"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dqkch"]
+spread = 180.0
+initial_velocity_min = 2.0
+initial_velocity_max = 5.0
+gravity = Vector3(0, 0, 0)
+linear_accel_min = 1.9999977
+linear_accel_max = 4.9999976
+color = Color(1, 1, 0, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qhqgy"]
+albedo_color = Color(1, 1, 0, 1)
+emission_enabled = true
+emission = Color(1, 0.8784314, 0, 1)
+emission_energy_multiplier = 3.04
+
+[sub_resource type="QuadMesh" id="QuadMesh_qhqgy"]
+material = SubResource("StandardMaterial3D_qhqgy")
+
+[node name="Player" type="CharacterBody3D" unique_id=1553557232]
+
+[node name="PlayerModel" parent="." unique_id=861182048 instance=ExtResource("1_3vyb7")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=133137851]
+transform = Transform3D(0.3, 0, 0, 0, 1.8, 0, 0, 0, 0.3, 0, 0.7, 0)
+shape = SubResource("CapsuleShape3D_g2els")
+
+[node name="CameraPivot" type="Node3D" parent="." unique_id=928250975]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=927387085]
+transform = Transform3D(0.9795753, -0.04694071, 0.19552211, 0, 0.9723699, 0.23344538, -0.20107792, -0.22867732, 0.9525095, 2, 2, 1.5)
+
+[node name="WeaponHolder" type="Node3D" parent="CameraPivot/Camera3D" unique_id=1518021452]
+
+[node name="Fists" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=1068227265]
+script = ExtResource("2_g2els")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Fists" unique_id=1188892268]
+
+[node name="Revolver" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=728613075]
+script = ExtResource("3_qhqgy")
+
+[node name="AudioShot" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=2139777357]
+
+[node name="MuzzleFlash" type="GPUParticles3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=1715618477]
+transform = Transform3D(0.5, 5.5879354e-09, 0, 0, 0.5000002, 0, 0, 0, 0.5000002, -1.1211715, 0.37002587, -4.3010073)
+emitting = false
+lifetime = 0.09999999999999999
+one_shot = true
+process_material = SubResource("ParticleProcessMaterial_dqkch")
+draw_pass_1 = SubResource("QuadMesh_qhqgy")
+
+[node name="RayCast3D" type="RayCast3D" parent="CameraPivot/Camera3D" unique_id=1883128150]
+transform = Transform3D(1, 2.2351742e-08, -1.4901161e-08, 0, 1.000001, 2.9802322e-08, 0, 2.9802322e-08, 1.000001, -0.034059286, -0.020279646, -0.0120584965)
+target_position = Vector3(0, 0, -50)
+collision_mask = 2
+collide_with_areas = true

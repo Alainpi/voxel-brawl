@@ -1,46 +1,17 @@
-[gd_scene load_steps=6 format=3 uid="uid://main"]
+[gd_scene format=3 uid="uid://main"]
 
-[ext_resource type="Script" path="res://player.gd" id="1_player"]
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_7dm0k"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_ground"]
-size = Vector3(40, 0.2, 40)
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_ig7tw"]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
-size = Vector3(40, 0.2, 40)
+[node name="Player" type="CharacterBody3D" unique_id=359401167]
 
-[sub_resource type="BoxMesh" id="BoxMesh_player"]
-size = Vector3(1, 1, 1)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=268880028]
+transform = Transform3D(0.4, 0, 0, 0, 1.8, 0, 0, 0, 0.4, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_7dm0k")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_player"]
-size = Vector3(1, 1, 1)
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CollisionShape3D" unique_id=450697591]
+mesh = SubResource("CapsuleMesh_ig7tw")
 
-[node name="Main" type="Node3D"]
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = null
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.707, -0.5, 0.5, 0, 0.707, 0.707, -0.707, -0.5, 0.5, 0, 10, 0)
-shadow_enabled = true
-
-[node name="Ground" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
-mesh = SubResource("BoxMesh_ground")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
-shape = SubResource("BoxShape3D_ground")
-
-[node name="Player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-script = ExtResource("1_player")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Player"]
-mesh = SubResource("BoxMesh_player")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-shape = SubResource("BoxShape3D_player")
-
-[node name="Camera3D" type="Camera3D" parent="Player"]
-transform = Transform3D(0.707, -0.408, 0.577, 0, 0.816, 0.577, -0.707, -0.408, 0.577, -10, 10, 10)
+[node name="Camera3D" type="Camera3D" parent="CollisionShape3D/MeshInstance3D" unique_id=796082860]
+transform = Transform3D(1, 0, 0, 0, 0.40354535, 0.91495967, 0, -0.91495967, 0.40354535, 0, 3, 5)

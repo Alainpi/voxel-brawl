@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://1eb3bgfvv5p2"]
+
+[ext_resource type="Script" uid="uid://c7ovhwiiuxggm" path="res://node_3d.gd" id="1_ns6u7"]
+[ext_resource type="Script" uid="uid://ivulrvsxutcg" path="res://scripts/voxel_segment.gd" id="2_5t4e2"]
+[ext_resource type="Script" uid="uid://dx2bubacyl7py" path="res://scenes/node_3d.tscn.gd" id="3_5t4e2"]
+
+[node name="TestScene" type="Node3D" unique_id=114047288]
+script = ExtResource("1_ns6u7")
+
+[node name="VoxelSegment" type="Node3D" parent="." unique_id=1340408530]
+script = ExtResource("2_5t4e2")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=413715479]
+transform = Transform3D(-1, 4.7741747e-08, -7.32357e-08, 0, 0.8377187, 0.5461019, 8.742278e-08, 0.5461019, -0.8377187, 0.5, 2, -2)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=668482455]
+transform = Transform3D(-1, 7.036605e-08, -5.1878327e-08, 0, 0.5934189, 0.8048938, 8.742278e-08, 0.8048938, -0.5934189, 0, 5, -3)
+
+[node name="DebrisPool" type="Node" parent="." unique_id=1513902968]
+script = ExtResource("3_5t4e2")
