@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://bkn44atvybohl"]
+
+[ext_resource type="PackedScene" uid="uid://cp2rt1cq6ratj" path="res://assets/kenney/corridor-wide.glb" id="1_axbku"]
+[ext_resource type="Texture2D" uid="uid://w4cce8q7c008" path="res://assets/kenney/colormap.png" id="2_nu6ip"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hfhy1"]
+albedo_texture = ExtResource("2_nu6ip")
+
+[node name="corridor-wide2" unique_id=1292480717 instance=ExtResource("1_axbku")]
+
+[node name="corridor-wide" parent="." index="0" unique_id=79105505]
+surface_material_override/0 = SubResource("StandardMaterial3D_hfhy1")

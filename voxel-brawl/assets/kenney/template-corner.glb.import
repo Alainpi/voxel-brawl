@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b22bfrvivx0tg"
-path="res://.godot/imported/corridor-end.glb-d765e72793492a301c09c3332a870271.scn"
+uid="uid://c5grr44lvn4cr"
+path="res://.godot/imported/template-corner.glb-3c87edfbe1ad8d62c63551a00677c9bb.scn"
 
 [deps]
 
-source_file="res://assets/kenney/corridor-end.glb"
-dest_files=["res://.godot/imported/corridor-end.glb-d765e72793492a301c09c3332a870271.scn"]
+source_file="res://assets/kenney/template-corner.glb"
+dest_files=["res://.godot/imported/template-corner.glb-3c87edfbe1ad8d62c63551a00677c9bb.scn"]
 
 [params]
 
@@ -37,6 +37,12 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"nodes": {
+"PATH:template-corner": {
+"generate/physics": true
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=1

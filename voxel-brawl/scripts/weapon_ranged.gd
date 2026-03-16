@@ -2,8 +2,8 @@
 class_name WeaponRanged
 extends Node3D
 
-const DAMAGE := 35.0
-const VOXEL_RADIUS := 10.0
+const DAMAGE := 25.0
+const VOXEL_RADIUS := 1.5
 const FIRE_RATE := 0.5
 const MAX_AMMO := 6
 const RELOAD_TIME := 1.5
@@ -62,10 +62,14 @@ func _fire() -> void:
 	var area := collider as Area3D
 	if area and area.has_meta("voxel_segment"):
 		var seg: VoxelSegment = area.get_meta("voxel_segment")
-		var hit_point := raycast.get_collision_point()
-		var local_hit := seg.to_local(hit_point)
-		DamageManager.process_hit(seg, local_hit, VOXEL_RADIUS, DAMAGE)
-		_player.trigger_hit_shake()
+		var cam := _player.camera.global_transform
+		var ray_origin := seg.to_local(cam.origin)
+		var ray_dir := (seg.global_transform.affine_inverse().basis * -cam.basis.z).normalized()
+		var result := seg.dda_raycast(ray_origin, ray_dir)
+		if result.hit:
+			var voxel_center := (Vector3(result.voxel) + Vector3(0.5, 0.5, 0.5)) * VoxelSegment.VOXEL_SIZE
+			DamageManager.process_hit(seg, voxel_center, VOXEL_RADIUS, DAMAGE)
+			_player.trigger_hit_shake()
 
 func _start_reload() -> void:
 	_reloading = true

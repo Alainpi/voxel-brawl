@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://d10xcxg65fnfe"]
+
+[ext_resource type="PackedScene" uid="uid://dqbs7hv8q0c8o" path="res://assets/kenney/template-wall-detail-a.glb" id="1_kgjvp"]
+[ext_resource type="Texture2D" uid="uid://w4cce8q7c008" path="res://assets/kenney/colormap.png" id="2_ks2lg"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4ucdn"]
+albedo_texture = ExtResource("2_ks2lg")
+
+[node name="template-wall-detail-a2" unique_id=1121774155 instance=ExtResource("1_kgjvp")]
+
+[node name="template-wall-detail-a" parent="." index="0" unique_id=1566570261]
+surface_material_override/0 = SubResource("StandardMaterial3D_4ucdn")

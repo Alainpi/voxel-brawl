@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://bfv3jflkpkapv"]
+
+[ext_resource type="PackedScene" uid="uid://7idmofnkm4xx" path="res://assets/kenney/gate-metal-bars.glb" id="1_7sv2c"]
+[ext_resource type="Texture2D" uid="uid://w4cce8q7c008" path="res://assets/kenney/colormap.png" id="2_02p1v"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ku0la"]
+albedo_texture = ExtResource("2_02p1v")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7sv2c"]
+albedo_texture = ExtResource("2_02p1v")
+
+[node name="gate-metal-bars2" unique_id=1731878567 instance=ExtResource("1_7sv2c")]
+
+[node name="gate-metal-bars" parent="." index="0" unique_id=930482935]
+surface_material_override/0 = SubResource("StandardMaterial3D_ku0la")
+
+[node name="gate" parent="gate-metal-bars" index="0" unique_id=1492494240]
+surface_material_override/0 = SubResource("StandardMaterial3D_7sv2c")

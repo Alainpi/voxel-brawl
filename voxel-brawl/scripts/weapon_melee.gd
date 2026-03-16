@@ -2,11 +2,11 @@
 class_name WeaponMelee
 extends Node3D
 
-const DAMAGE := 15.0
-const VOXEL_RADIUS := 5.0
+const DAMAGE := 25.0
+const VOXEL_RADIUS := 3.0
 const COOLDOWN := 0.4
-const REACH := 1.2
-const HIT_SPHERE_RADIUS := 0.4
+const REACH := .5
+const HIT_SPHERE_RADIUS := 1
 
 @onready var audio: AudioStreamPlayer3D = $AudioStreamPlayer3D
 
@@ -27,11 +27,11 @@ func _attack() -> void:
 	_player.play_attack_anim("punch")
 
 	var space := get_world_3d().direct_space_state
-	var origin := global_position
 	var params := PhysicsShapeQueryParameters3D.new()
 	params.shape = SphereShape3D.new()
 	(params.shape as SphereShape3D).radius = HIT_SPHERE_RADIUS
-	params.transform = Transform3D(Basis.IDENTITY, origin + (-get_node("../..").global_transform.basis.z * REACH))
+	var attack_origin := _player.global_position + Vector3(0, 1.2, 0) + (-_player.global_transform.basis.z * REACH)
+	params.transform = Transform3D(Basis.IDENTITY, attack_origin)
 	params.collision_mask = 2  # Layer 2 = voxel segment colliders
 	params.collide_with_areas = true
 	params.collide_with_bodies = false

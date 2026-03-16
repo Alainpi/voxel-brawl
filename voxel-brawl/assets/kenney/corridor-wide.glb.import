@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dqbs7hv8q0c8o"
-path="res://.godot/imported/template-wall-detail-a.glb-7a291fc170ff55ece8c4a860ec878ff5.scn"
+uid="uid://cp2rt1cq6ratj"
+path="res://.godot/imported/corridor-wide.glb-0a677b9f2b84651a647ad48872ad1d74.scn"
 
 [deps]
 
-source_file="res://assets/kenney/template-wall-detail-a.glb"
-dest_files=["res://.godot/imported/template-wall-detail-a.glb-7a291fc170ff55ece8c4a860ec878ff5.scn"]
+source_file="res://assets/kenney/corridor-wide.glb"
+dest_files=["res://.godot/imported/corridor-wide.glb-0a677b9f2b84651a647ad48872ad1d74.scn"]
 
 [params]
 
@@ -37,6 +37,12 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"nodes": {
+"PATH:corridor-wide": {
+"generate/physics": true
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=1

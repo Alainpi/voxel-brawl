@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cfl54rj61kyve"
-path="res://.godot/imported/room-large.glb-b8a830fd3fdd4c4fd691261a07fa7dc2.scn"
+uid="uid://cva6umwva383r"
+path="res://.godot/imported/template-floor-detail-a.glb-2a447346b478a3d255f15aac7f8d4257.scn"
 
 [deps]
 
-source_file="res://assets/kenney/room-large.glb"
-dest_files=["res://.godot/imported/room-large.glb-b8a830fd3fdd4c4fd691261a07fa7dc2.scn"]
+source_file="res://assets/kenney/template-floor-detail-a.glb"
+dest_files=["res://.godot/imported/template-floor-detail-a.glb-2a447346b478a3d255f15aac7f8d4257.scn"]
 
 [params]
 
@@ -37,6 +37,12 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"nodes": {
+"PATH:template-floor-detail-a": {
+"generate/physics": true
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=1

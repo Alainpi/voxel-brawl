@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://p5amjeni6gha"
-path="res://.godot/imported/corridor-wide-corner.glb-cd341dbddb5e059d7d1f7d12ccf7124a.scn"
+uid="uid://7idmofnkm4xx"
+path="res://.godot/imported/gate-metal-bars.glb-d9c0aed1791f3ed95c908be6c4c29bf6.scn"
 
 [deps]
 
-source_file="res://assets/kenney/corridor-wide-corner.glb"
-dest_files=["res://.godot/imported/corridor-wide-corner.glb-cd341dbddb5e059d7d1f7d12ccf7124a.scn"]
+source_file="res://assets/kenney/gate-metal-bars.glb"
+dest_files=["res://.godot/imported/gate-metal-bars.glb-d9c0aed1791f3ed95c908be6c4c29bf6.scn"]
 
 [params]
 
@@ -37,6 +37,15 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"nodes": {
+"PATH:gate-metal-bars": {
+"generate/physics": true
+},
+"PATH:gate-metal-bars/gate": {
+"generate/physics": true
+}
+}
+}
 gltf/naming_version=2
 gltf/embedded_image_handling=1

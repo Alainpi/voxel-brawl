@@ -9,12 +9,12 @@ var _is_dead: bool = false
 
 # Segment config: [vox_path, local_offset, detach_threshold]
 const SEGMENT_CONFIG := {
-	"torso": ["res://assets/voxels/torso.vox", Vector3(-0.4, 2.2, -0.3), 0.3],
-	"head":  ["res://assets/voxels/head.vox",  Vector3(-0.3, 2.8, -0.3), 0.3],
-	"arm_l": ["res://assets/voxels/arm_l.vox", Vector3(-0.8, 2.2, -0.2), 0.3],
-	"arm_r": ["res://assets/voxels/arm_r.vox", Vector3(0.4,  2.2, -0.2), 0.3],
-	"leg_l": ["res://assets/voxels/leg_l.vox", Vector3(-0.4, 1.0, -0.2), 0.4],
-	"leg_r": ["res://assets/voxels/leg_r.vox", Vector3(0.0,  1.0, -0.2), 0.4],
+	"torso": ["res://assets/voxels/torso.vox", Vector3(-0.4, 2.2, -0.3), 0.6],
+	"head":  ["res://assets/voxels/head.vox",  Vector3(-0.3, 2.8, -0.3), 0.6],
+	"arm_l": ["res://assets/voxels/arm_l.vox", Vector3(-0.8, 2.2, -0.2), 0.6],
+	"arm_r": ["res://assets/voxels/arm_r.vox", Vector3(0.4,  2.2, -0.2), 0.6],
+	"leg_l": ["res://assets/voxels/leg_l.vox", Vector3(-0.4, 1.0, -0.2), 0.6],
+	"leg_r": ["res://assets/voxels/leg_r.vox", Vector3(0.0,  1.0, -0.2), 0.6],
 }
 
 func _ready() -> void:
@@ -34,11 +34,16 @@ func _build_dummy() -> void:
 		add_child(seg)
 		seg.load_from_vox(cfg[0])
 
-		# Add a box collider for hit detection
+		# Add a box collider for hit detection, centered on the actual voxel mesh
 		var area := Area3D.new()
 		var col := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(seg.mesh_instance.get_aabb().size) if seg.mesh_instance.mesh else Vector3(0.4, 0.8, 0.4)
+		var aabb: AABB = seg.mesh_instance.get_aabb() if seg.mesh_instance.mesh else AABB()
+		if aabb.size != Vector3.ZERO:
+			shape.size = aabb.size
+			col.position = aabb.get_center()
+		else:
+			shape.size = Vector3(0.4, 0.8, 0.4)
 		col.shape = shape
 		area.add_child(col)
 		area.collision_layer = 2
@@ -50,19 +55,15 @@ func _build_dummy() -> void:
 		segments[seg_name] = seg
 
 func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
-	if seg_name == "torso" and not _is_dead:
+	if seg_name in ["torso", "head"] and not _is_dead:
 		_die()
 
 func _die() -> void:
 	_is_dead = true
 	emit_signal("died")
 
-	# Clean up detached segments reparented to scene root
-	var detached_nodes: Array = []
-	for child in get_tree().root.get_children():
-		if child is VoxelSegment and child.is_detached:
-			detached_nodes.append(child)
-	for node in detached_nodes:
+	# Clean up detached limb rigidbodies added to scene root
+	for node in get_tree().get_nodes_in_group("detached_limb"):
 		node.queue_free()
 
 	await get_tree().create_timer(1.5).timeout

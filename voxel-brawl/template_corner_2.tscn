@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://dj8il8yfgejmi"]
+
+[ext_resource type="PackedScene" uid="uid://c5grr44lvn4cr" path="res://assets/kenney/template-corner.glb" id="1_fgq3a"]
+[ext_resource type="Texture2D" uid="uid://w4cce8q7c008" path="res://assets/kenney/colormap.png" id="2_vxx3r"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vq1b8"]
+albedo_texture = ExtResource("2_vxx3r")
+
+[node name="template-corner2" unique_id=1402388609 instance=ExtResource("1_fgq3a")]
+
+[node name="template-corner" parent="." index="0" unique_id=15291119]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.013411999, 0, 0)
+surface_material_override/0 = SubResource("StandardMaterial3D_vq1b8")

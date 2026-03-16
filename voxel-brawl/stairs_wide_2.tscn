@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://cfgfl5ghvmwbe"]
+
+[ext_resource type="PackedScene" uid="uid://cvwrmvquhi3sq" path="res://assets/kenney/stairs-wide.glb" id="1_udb54"]
+[ext_resource type="Texture2D" uid="uid://w4cce8q7c008" path="res://assets/kenney/colormap.png" id="2_t1gus"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_htmds"]
+albedo_texture = ExtResource("2_t1gus")
+
+[node name="stairs-wide2" unique_id=792507418 instance=ExtResource("1_udb54")]
+
+[node name="stairs-wide" parent="." index="0" unique_id=1789355353]
+surface_material_override/0 = SubResource("StandardMaterial3D_htmds")

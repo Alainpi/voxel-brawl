@@ -36,7 +36,7 @@ shape = SubResource("CapsuleShape3D_g2els")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=927387085]
-transform = Transform3D(0.9795753, -0.04694071, 0.19552211, 0, 0.9723699, 0.23344538, -0.20107792, -0.22867732, 0.9525095, 2, 2, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1, 1.5)
 
 [node name="WeaponHolder" type="Node3D" parent="CameraPivot/Camera3D" unique_id=1518021452]
 
@@ -53,13 +53,12 @@ script = ExtResource("3_qhqgy")
 [node name="MuzzleFlash" type="GPUParticles3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=1715618477]
 transform = Transform3D(0.5, 5.5879354e-09, 0, 0, 0.5000002, 0, 0, 0, 0.5000002, -1.1211715, 0.37002587, -4.3010073)
 emitting = false
-lifetime = 0.09999999999999999
+lifetime = 0.1
 one_shot = true
 process_material = SubResource("ParticleProcessMaterial_dqkch")
 draw_pass_1 = SubResource("QuadMesh_qhqgy")
 
 [node name="RayCast3D" type="RayCast3D" parent="CameraPivot/Camera3D" unique_id=1883128150]
-transform = Transform3D(1, 2.2351742e-08, -1.4901161e-08, 0, 1.000001, 2.9802322e-08, 0, 2.9802322e-08, 1.000001, -0.034059286, -0.020279646, -0.0120584965)
 target_position = Vector3(0, 0, -50)
 collision_mask = 2
 collide_with_areas = true

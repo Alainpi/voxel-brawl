@@ -104,6 +104,8 @@ func _update_camera_effects(dir: Vector3, delta: float) -> void:
 func _equip_weapon(weapon: Node) -> void:
 	fists.visible = (weapon == fists)
 	revolver.visible = (weapon == revolver)
+	fists.set_physics_process(weapon == fists)
+	revolver.set_physics_process(weapon == revolver)
 	_current_weapon = weapon
 	var hud := get_node_or_null("/root/test_scene/hud")
 	if hud:
