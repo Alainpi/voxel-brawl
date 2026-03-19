@@ -6,7 +6,16 @@ const SPEED := 5.0
 const SPRINT_MULT := 1.6
 const JUMP_FORCE := 6.0
 const GRAVITY := 9.8
-const MOUSE_SENS := 0.002
+
+# Top-down camera: height=14, z-offset=8 → atan2(14,8) ≈ 60° down from horizontal
+const CAM_HEIGHT := 11
+const CAM_Z_OFFSET := 10
+const CAM_FOLLOW_SPEED := 8.0  # Slight lag for juice
+const CAM_ROT_SENS := 0.005    # Radians per pixel for middle-mouse orbit
+const CAM_ROT_FRICTION := 3.0  	# Damping after release — lower slides longer
+const CAM_DEFAULT_YAW := 90.0  # Degrees — starting Y rotation of camera
+const CAM_PITCH := -45.0       # Degrees — X tilt. More negative = steeper/more top-down
+const CRAWL_SPEED := 1.2
 
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var camera_pivot: Node3D = $CameraPivot
@@ -14,111 +23,211 @@ const MOUSE_SENS := 0.002
 @onready var weapon_holder: Node3D = $CameraPivot/Camera3D/WeaponHolder
 @onready var fists: WeaponMelee = $CameraPivot/Camera3D/WeaponHolder/Fists
 @onready var revolver: WeaponRanged = $CameraPivot/Camera3D/WeaponHolder/Revolver
+@onready var bat: WeaponMelee = $CameraPivot/Camera3D/WeaponHolder/Bat
+@onready var katana: WeaponMelee = $CameraPivot/Camera3D/WeaponHolder/Katana
+
+# [vox_path, bone_name, position_offset, rotation_degrees_x, scale, root_axis]
+# scale: compensates for bone-inherited scale (head bone is ~0.1 scale in Blender rig)
+# root_axis: direction in vox local space toward attachment end (Vector3i.ZERO = never detach)
+const PLAYER_SEGMENT_CONFIG := {
+	"torso": ["res://assets/voxels/torso.vox", "torso",     Vector3(-0.2, 1.5, -0.1), 90, Vector3(1, 1, 1),    Vector3i.ZERO],
+	"head":  ["res://assets/voxels/head.vox",  "head",      Vector3(-1, 10, -1),  90, Vector3(10, 10, 10), Vector3i(0, -1, 0)],
+	"arm_l": ["res://assets/voxels/arm_l.vox", "arm-left",  Vector3(0.2, 0.4, 0),     90, Vector3(1, 1, 1),    Vector3i(0, 1, 0)],
+	"arm_r": ["res://assets/voxels/arm_r.vox", "arm-right", Vector3(-0.2, 0.4, 0),    90, Vector3(1, 1, 1),    Vector3i(0, 1, 0)],
+	"leg_l": ["res://assets/voxels/leg_l.vox", "leg-left",  Vector3(0, 0, 0),         90, Vector3(1, 1, 1),    Vector3i(0, 1, 0)],
+	"leg_r": ["res://assets/voxels/leg_r.vox", "leg-right", Vector3(0, 0, 0),         90, Vector3(1, 1, 1),    Vector3i(0, 1, 0)],
+}
+
+var segments: Dictionary = {}
+var _is_dead: bool = false
+var _legs_lost: int = 0
+var _weapon_anchor: Node3D = null
 
 var _current_weapon: Node = null
-var _cam_shake_time := 0.0
-var _cam_shake_intensity := 0.0
-var _bob_time := 0.0
-var _cam_base_y := 0.0
+var _cam_rotating := false
+var _cam_velocity := 0.0   # rad/s — persists after release for slide
+var _cam_drag_x := 0.0     # pixel accumulator between physics ticks
 
 func _ready() -> void:
-	# Multiplayer guard — always true for MVP, used in Phase 3
+	add_to_group("player")
 	if not is_multiplayer_authority():
 		set_process_input(false)
 		set_physics_process(false)
 		return
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	_cam_base_y = camera.position.y
+
+	# Detach camera_pivot from player rotation — it follows position only
+	camera_pivot.top_level = true
+	camera_pivot.global_position = global_position
+
+	# Fixed top-down angle: camera sits above and behind player
+	camera_pivot.rotation.y = deg_to_rad(CAM_DEFAULT_YAW)
+	camera.position = Vector3(0.0, CAM_HEIGHT, CAM_Z_OFFSET)
+	camera.rotation_degrees = Vector3(CAM_PITCH, 0.0, 0.0)
+
+	# Visible cursor for mouse aiming; confined so it stays in window
+	Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN)
+
+	# FOV overlay — a full-screen spatial quad reads the depth buffer to reconstruct
+	# world XZ for each pixel and tests it against the visibility polygon in world space.
+	# This approach is height-agnostic: wall faces, pillar tops, and ground all work correctly.
+	var fov_mat := ShaderMaterial.new()
+	fov_mat.shader = load("res://shaders/fov_world.gdshader")
+	fov_mat.render_priority = 100
+	var fov_quad := QuadMesh.new()
+	fov_quad.size = Vector2(2.0, 2.0)
+	var fov_mesh := MeshInstance3D.new()
+	fov_mesh.mesh = fov_quad
+	fov_mesh.material_override = fov_mat
+	fov_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Large cull margin prevents Godot from frustum-culling the unit-sized quad.
+	# The POSITION override in the shader makes the quad fill the screen regardless
+	# of where the node sits in the scene, so parent transform doesn't matter.
+	fov_mesh.extra_cull_margin = 16384.0
+	add_child(fov_mesh)
+	var fov_overlay: Node = load("res://scripts/fov_overlay.gd").new()
+	add_child(fov_overlay)
+	fov_overlay.setup(self, fov_mat)
+
 	revolver.ammo_changed.connect(_on_ammo_changed)
 	_equip_weapon.call_deferred(fists)
+	call_deferred("_build_voxel_body")
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion:
-		rotate_y(-event.relative.x * MOUSE_SENS)
-		camera_pivot.rotate_x(-event.relative.y * MOUSE_SENS)
-		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -1.4, 1.4)
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_MIDDLE:
+			_cam_rotating = event.pressed
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_equip_weapon(revolver)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_equip_weapon(fists)
 
-	if event.is_action_pressed("ui_cancel"):
-		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# Accumulate drag pixels — applied as velocity in _physics_process
+	if event is InputEventMouseMotion and _cam_rotating:
+		_cam_drag_x -= event.relative.x
 
 	if event.is_action_pressed("switch_weapon_1"):
 		_equip_weapon(fists)
 	if event.is_action_pressed("switch_weapon_2"):
 		_equip_weapon(revolver)
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_equip_weapon(revolver)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_equip_weapon(fists)
+	if event.is_action_pressed("switch_weapon_3"):
+		_equip_weapon(bat)
+	if event.is_action_pressed("switch_weapon_4"):
+		_equip_weapon(katana)
 
 func _physics_process(delta: float) -> void:
+	# Camera orbit: while dragging, velocity = exact mouse input; after release, friction glides to zero
+	if _cam_rotating and delta > 0.0:
+		_cam_velocity = _cam_drag_x * CAM_ROT_SENS / delta
+	else:
+		_cam_velocity = lerp(_cam_velocity, 0.0, CAM_ROT_FRICTION * delta)
+	_cam_drag_x = 0.0
+	camera_pivot.rotation.y += _cam_velocity * delta
+
+	# Camera follows player with slight lag
+	camera_pivot.global_position = camera_pivot.global_position.lerp(
+		global_position, CAM_FOLLOW_SPEED * delta
+	)
+
 	# Gravity
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
-	# Jump
-	if Input.is_action_just_pressed("jump") and is_on_floor():
+	# Jump — disabled when crawling
+	if Input.is_action_just_pressed("jump") and is_on_floor() and _legs_lost == 0:
 		velocity.y = JUMP_FORCE
 
-	# Horizontal movement
+	# Movement relative to camera yaw so WASD always matches screen orientation
+	var cam_fwd := -camera_pivot.global_transform.basis.z
+	var cam_right := camera_pivot.global_transform.basis.x
 	var dir := Vector3.ZERO
-	if Input.is_action_pressed("move_forward"):  dir -= transform.basis.z
-	if Input.is_action_pressed("move_back"):     dir += transform.basis.z
-	if Input.is_action_pressed("move_left"):     dir -= transform.basis.x
-	if Input.is_action_pressed("move_right"):    dir += transform.basis.x
+	if Input.is_action_pressed("move_forward"):  dir += cam_fwd
+	if Input.is_action_pressed("move_back"):     dir -= cam_fwd
+	if Input.is_action_pressed("move_left"):     dir -= cam_right
+	if Input.is_action_pressed("move_right"):    dir += cam_right
+	dir.y = 0.0
 	dir = dir.normalized()
 
-	var speed := SPEED * (SPRINT_MULT if Input.is_action_pressed("sprint") else 1.0)
+	var speed: float
+	if _legs_lost >= 2:
+		speed = CRAWL_SPEED
+	elif _legs_lost == 1:
+		speed = SPEED * 0.5
+	else:
+		speed = SPEED * (SPRINT_MULT if Input.is_action_pressed("sprint") else 1.0)
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 
+	# Rotate player to face mouse cursor on the ground plane
+	var mouse_world := get_mouse_world_pos()
+	if mouse_world != Vector3.ZERO:
+		var flat := Vector3(mouse_world.x - global_position.x, 0.0, mouse_world.z - global_position.z)
+		if flat.length() > 0.1:
+			look_at(Vector3(mouse_world.x, global_position.y, mouse_world.z), Vector3.UP)
+
 	move_and_slide()
-	_update_animation(dir, delta)
-	_update_camera_effects(dir, delta)
+	_update_animation(dir)
 
-func _update_animation(dir: Vector3, _delta: float) -> void:
-	var speed_h := Vector2(velocity.x, velocity.z).length()
-	if speed_h > 0.1:
-		anim_player.play("walk")
-	else:
-		anim_player.play("idle")
+# Returns camera ray origin and direction for the current mouse position.
+func get_camera_ray() -> Dictionary:
+	var mouse_pos := get_viewport().get_mouse_position()
+	return {
+		"origin": camera.project_ray_origin(mouse_pos),
+		"dir": camera.project_ray_normal(mouse_pos)
+	}
 
-func _update_camera_effects(dir: Vector3, delta: float) -> void:
-	# Walk bob
-	var speed_h := Vector2(velocity.x, velocity.z).length()
-	if speed_h > 0.1:
-		_bob_time += delta * speed_h * 1.5
-		camera.position.y = _cam_base_y + sin(_bob_time * 2.0) * 0.02
-	else:
-		_bob_time = 0.0
-		camera.position.y = lerp(camera.position.y, _cam_base_y, delta * 10.0)
+# Returns world position of the mouse cursor on the y=0 ground plane.
+# Returns Vector3.ZERO if the ray misses (camera always angled down so this is rare).
+func get_mouse_world_pos() -> Vector3:
+	var mouse_pos := get_viewport().get_mouse_position()
+	var ray_origin := camera.project_ray_origin(mouse_pos)
+	var ray_dir := camera.project_ray_normal(mouse_pos)
+	if ray_dir.y >= 0.0:
+		return Vector3.ZERO
+	var t := -ray_origin.y / ray_dir.y
+	return ray_origin + ray_dir * t
 
-	# Hit shake
-	if _cam_shake_time > 0:
-		_cam_shake_time -= delta
-		var shake := randf_range(-_cam_shake_intensity, _cam_shake_intensity)
-		camera.rotation.z = shake
+func _update_animation(_dir: Vector3) -> void:
+	# Don't interrupt an attack animation mid-play
+	var cur := anim_player.current_animation
+	if anim_player.is_playing() and cur in ["attack-melee-right", "holding-right-shoot"]:
+		return
+	if _current_weapon == revolver:
+		anim_player.play("holding-right")
 	else:
-		camera.rotation.z = lerp(camera.rotation.z, 0.0, delta * 20.0)
+		var speed_h := Vector2(velocity.x, velocity.z).length()
+		if speed_h > 0.1:
+			anim_player.play("walk")
+		else:
+			anim_player.play("idle")
 
 func _equip_weapon(weapon: Node) -> void:
 	fists.visible = (weapon == fists)
 	revolver.visible = (weapon == revolver)
+	bat.visible = (weapon == bat)
+	katana.visible = (weapon == katana)
 	fists.set_physics_process(weapon == fists)
 	revolver.set_physics_process(weapon == revolver)
+	bat.set_physics_process(weapon == bat)
+	katana.set_physics_process(weapon == katana)
 	_current_weapon = weapon
 	var hud := get_node_or_null("/root/test_scene/hud")
 	if hud:
-		hud.set_weapon_name("Fists" if weapon == fists else "Revolver")
+		var names := {fists: "Fists", revolver: "Revolver", bat: "Bat", katana: "Katana"}
+		hud.set_weapon_name(names.get(weapon, ""))
 
 func _on_ammo_changed(current: int, max_ammo: int) -> void:
 	var hud := get_node_or_null("/root/test_scene/hud")
 	if hud:
 		hud.update_ammo(current, max_ammo)
 
+# Called by weapons on hit — no-op for top-down (no FPS shake)
 func trigger_hit_shake() -> void:
-	_cam_shake_time = 0.1
-	_cam_shake_intensity = 0.03
+	pass
+
+func trigger_crosshair_recoil() -> void:
+	var hud := get_node_or_null("/root/test_scene/hud")
+	if hud:
+		hud.recoil()
 
 func play_attack_anim(anim_name: String) -> void:
 	var mapped := anim_name
@@ -128,3 +237,86 @@ func play_attack_anim(anim_name: String) -> void:
 		mapped = "attack-melee-right"
 	anim_player.stop()
 	anim_player.play(mapped)
+
+func _build_voxel_body() -> void:
+	# Hide the original GLB meshes — skeleton stays alive to drive animations
+	for mesh in $PlayerModel.find_children("*", "MeshInstance3D", true, false):
+		mesh.visible = false
+
+	var skeleton: Skeleton3D = $PlayerModel.find_child("Skeleton3D", true, false)
+	if skeleton == null:
+		push_error("Player: Skeleton3D not found in PlayerModel")
+		return
+
+	for seg_name in PLAYER_SEGMENT_CONFIG:
+		var cfg = PLAYER_SEGMENT_CONFIG[seg_name]
+		var vox_path: String = cfg[0]
+		var bone_name: String = cfg[1]
+
+		var bone_idx := skeleton.find_bone(bone_name)
+		if bone_idx == -1:
+			push_warning("Player: bone not found: " + bone_name)
+			continue
+
+		var attach := BoneAttachment3D.new()
+		attach.bone_name = bone_name
+		attach.bone_idx = bone_idx
+		skeleton.add_child(attach)
+
+		var seg := VoxelSegment.new()
+		seg.name = "VoxelSegment_" + seg_name
+		seg.root_axis = cfg[5]
+		seg.position = cfg[2]
+		seg.rotation_degrees.x = cfg[3]
+		seg.scale = cfg[4]
+		attach.add_child(seg)
+		seg.load_from_vox(vox_path)
+
+		var area := Area3D.new()
+		var col := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		var aabb: AABB = seg.mesh_instance.get_aabb() if seg.mesh_instance.mesh else AABB()
+		if aabb.size != Vector3.ZERO:
+			shape.size = aabb.size
+			col.position = aabb.get_center()
+		else:
+			shape.size = Vector3(0.4, 0.8, 0.4)
+		col.shape = shape
+		area.add_child(col)
+		area.collision_layer = 2
+		area.collision_mask = 0
+		area.set_meta("voxel_segment", seg)
+		seg.add_child(area)
+
+		seg.detached.connect(_on_player_segment_detached.bind(seg_name))
+		segments[seg_name] = seg
+
+		if seg_name == "arm_r":
+			var anchor := Node3D.new()
+			anchor.name = "WeaponAnchor"
+			anchor.position = Vector3(.3, -0.9, -0.4)  # tip of arm — tune in-game
+			attach.add_child(anchor)
+			_weapon_anchor = anchor
+
+	if _weapon_anchor:
+		weapon_holder.reparent(_weapon_anchor, false)
+		weapon_holder.position = Vector3.ZERO
+		weapon_holder.rotation = Vector3.ZERO
+
+func take_damage(amount: float) -> void:
+	if _is_dead or segments.is_empty():
+		return
+	var seg: VoxelSegment = segments.get("torso")
+	if seg != null:
+		seg.take_hit(Vector3.ZERO, 2.0, amount)
+
+func _on_player_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
+	if seg_name in ["torso", "head"] and not _is_dead:
+		_die()
+	elif seg_name in ["leg_l", "leg_r"]:
+		_legs_lost += 1
+		print("Player lost a leg! Speed reduced.")
+
+func _die() -> void:
+	_is_dead = true
+	print("Player died! (TODO Task 6: death/respawn)")

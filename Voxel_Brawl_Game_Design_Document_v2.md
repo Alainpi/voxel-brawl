@@ -435,49 +435,109 @@ Even in Phase 1 (single-player prototype), structure code with `multiplayer.is_s
 
 ## 11. Development Roadmap (Prototype in 1–3 Months)
 
-### Phase 0: Voxel Engine Prototype (Weeks 1–2) [UPDATED]
+### Phase 0: Voxel Engine Prototype (Weeks 1–2) [UPDATED] ✅ COMPLETE
 
 **Goal: A single destructible voxel character you can hit and carve.**
 
 This is new — prototype the hardest system first before building anything else.
 
-- Set up Godot project + Git repo
-- Write the voxel grid data structure (Dictionary of Vector3i → Color)
-- Implement SurfaceTool mesh generation from voxel data (flat shading, vertex colors)
-- Load a test character from a MagicaVoxel .vox file
-- Implement hit detection: click on character, remove voxels in a radius
-- Spawn debris cubes (tiered: RigidBody3D for big chunks, GPUParticles3D for small ones)
-- Rebuild mesh after voxel removal — verify performance is acceptable
-- Test with a 16x32x16 character to validate the approach works
+- ✅ Set up Godot project + Git repo
+- ✅ Write the voxel grid data structure (Dictionary of Vector3i → Color)
+- ✅ Implement SurfaceTool mesh generation from voxel data (flat shading, vertex colors)
+- ✅ Load a test character from a MagicaVoxel .vox file
+- ✅ Implement hit detection: click on character, remove voxels in a radius
+- ✅ Spawn debris cubes (tiered: RigidBody3D for big chunks, GPUParticles3D for small ones)
+- ✅ Rebuild mesh after voxel removal — verify performance is acceptable
+- ✅ Test with a 16x32x16 character to validate the approach works
 
-### Phase 1: Foundation (Weeks 3–5)
+### Phase 1: Foundation (Weeks 3–5) ✅ COMPLETE
 
 **Goal: A single character moving in a voxel arena with basic melee.**
 
-- Create a simple flat arena (textured floor, walls)
-- Build character skeleton + animations in Blender, export as .glb
-- Attach runtime voxel meshes to skeleton bones in Godot
-- Implement WASD movement + mouse aim with fixed top-down camera
-- Basic punch attack with collision detection
-- Voxel chunk destruction on hit (using the Phase 0 system)
-- Set up flat shading / outline shader for visual style
-- **[NEW]** Implement fog-of-war FOV system: raycast-based vision radius with wall occlusion
-- **[NEW]** FOV shader/overlay: render non-visible areas as solid black fog
+- ✅ Create a simple flat arena (textured floor, walls)
+- ✅ Build character skeleton + animations in Blender, export as .glb (walk, idle, punch, shoot)
+- ⏭️ Attach runtime voxel meshes to skeleton bones in Godot — deferred to Phase 2; player currently uses static Blender mesh. Requires NPC enemies to be meaningful to implement and test.
+- ✅ Implement WASD movement + mouse aim with fixed top-down camera
+- ✅ Basic punch attack with collision detection
+- ✅ Voxel chunk destruction on hit (using the Phase 0 system)
+- ✅ Set up flat shading for visual style (outline shader deferred — optional)
+- ✅ **[NEW]** Implement fog-of-war FOV system: raycast-based vision cone (120°, 12-unit radius) with wall occlusion, world-space depth-reconstruction shader, enemy visibility toggling
+- ✅ **[NEW]** FOV shader/overlay: non-visible areas rendered as dark fog via full-screen spatial shader on D3D12/Vulkan
 
 ### Phase 2: Combat + Dismemberment (Weeks 6–8)
 
-**Goal: Full dismemberment system + 4–5 weapons working.**
+**Goal: Full dismemberment system + 4–5 weapons working + player mobility + destructible player.**
 
+- Attach runtime voxel meshes to player skeleton bones via BoneAttachment3D (replaces static Blender mesh — player becomes destructible)
+- Basic NPC enemy (Brawler) with chase AI using NavigationAgent3D
 - Implement limb HP system based on remaining voxel count per body segment
 - Limb detachment: detach body segment node, add RigidBody3D, apply force
 - Detached limbs remain destructible (keep their voxel grid)
+- **Visible weapon models:** add `weapon-right` bone to Blender rig (child of `arm-right`), move WeaponHolder from Camera3D to a BoneAttachment3D on that bone so weapons appear in world space on the character; model each weapon in MagicaVoxel, export OBJ, attach as MeshInstance3D child of each weapon node
 - Add 2 melee weapons (bat, katana) + 2 ranged (revolver, shotgun)
 - Weapon pickup system (walk over to grab)
-- Basic NPC enemy (Brawler) with chase AI using NavigationAgent3D
 - Health bar UI
 - Death + respawn logic
 
-### Phase 3: Multiplayer (Weeks 9–11)
+**Player Mobility & Cover Mechanics [NEW]**
+
+- **Crouch** (hold C): reduces player capsule height by ~50%, slower movement, can move behind low cover
+- **Prone** (double-tap C or hold X): fully flat, very slow crawl movement, smallest possible profile — useful for hiding behind very low obstacles
+- **Lean left / right** (Q / E while near cover): peek around corners without exposing the full body; only the leaning portion of the player's hitbox extends past cover. Leaning is a hold, not a toggle.
+
+**Barrel-Origin Ray Casting [NEW]**
+
+- Each weapon model has a dedicated **Muzzle** node (Node3D at the tip of the barrel)
+- All shot rays originate from the Muzzle world position rather than player chest
+- Muzzle position naturally accounts for crouch/prone height changes and lean offset
+- Combined with the two-ray system (horizontal wall-check + camera-ray voxel targeting), this gives fully realistic shot behaviour: crouching behind cover means the barrel is below the wall top and shots are physically blocked; leaning means the barrel clears the corner only when the lean is sufficient
+- Headshots, legshots, and armshots remain possible because the camera ray still determines which exact voxel is hit once the wall-check passes
+
+### Phase 3: Skeletal Destruction (Weeks 9–11)
+
+**Goal: Replace the 6-segment voxel body with a 12-bone anatomical skeleton for granular dismemberment.**
+
+The core idea: each character has 12 individually destructible bone segments arranged in a parent-child hierarchy. Severing the connection between two bones severs everything below it in the chain — cut the elbow and the forearm flies off; cut the knee and the lower leg goes with it. Weapons like swords become far more meaningful because the exact voxels hit determine which joint breaks.
+
+**12-Bone Hierarchy:**
+
+```
+torso_bottom (pelvis) — root, anchor, never detaches independently
+ ├── torso_top (ribcage/spine)
+ │    ├── skull_bottom (jaw/neck)
+ │    │    └── skull_top (cranium)
+ │    ├── arm_r_upper (humerus)
+ │    │    └── arm_r_fore (radius/ulna)
+ │    └── arm_l_upper
+ │         └── arm_l_fore
+ ├── leg_r_upper (femur)
+ │    └── leg_r_fore (tibia/fibula)
+ └── leg_l_upper
+      └── leg_l_fore
+```
+
+**Art Pipeline:**
+
+- Model 12 distinct bone .vox pieces in MagicaVoxel — painted with a unique bone color so they visually read as skeleton when flesh is carved away
+- Rig corresponding skeleton in Blender with 12 bones matching the hierarchy above; export as .glb
+- In Godot, each bone piece loads as a VoxelSegment attached to its Blender bone via BoneAttachment3D — same pipeline as the current 6-segment system, just doubled in resolution
+- Flesh voxels wrap the bone models; interior voxels auto-detect as higher-HP bone material (current system already handles this)
+
+**Code Changes Required:**
+
+- Add hierarchy propagation to VoxelSegment: when a segment detaches, all child segments in the hierarchy detach with it (e.g. upper arm severs → forearm flies off with it)
+- Update character scripts (Player, Brawler, Dummy) from 6 segments to 12 with correct parent-child bone references
+- Tune per-bone detachment thresholds: skull top is fragile, pelvis is very tough
+- Update leg-loss crawl logic: losing a foreleg vs upper leg produces different speed penalties
+
+**Why this matters for gameplay:**
+
+- Sword swings that clip the forearm sever only the forearm — half-dismemberment becomes possible
+- Head split: a slash across the skull top produces a partial decapitation while the jaw/neck remains
+- Players can still fight with severed upper arm (torso intact), but lose the arm entirely if the humerus goes
+- Bleed-through destruction: carving flesh exposes the bone beneath, which then takes more hits to destroy
+
+### Phase 4: Multiplayer (Weeks 12–14)
 
 **Goal: 2+ players connected and fighting in the same arena.**
 
@@ -491,7 +551,7 @@ This is new — prototype the hardest system first before building anything else
 - Fix desyncs and rubberbanding (interpolation + server reconciliation)
 - **[NEW]** FOV in multiplayer: each client computes own FOV locally; teammate FOV rendered dimmed in team modes
 
-### Phase 4: Game Modes + Cards (Weeks 12–14)
+### Phase 5: Game Modes + Cards (Weeks 15–17)
 
 **Goal: FFA Deathmatch fully playable with card system.**
 
@@ -503,7 +563,30 @@ This is new — prototype the hardest system first before building anything else
 - Basic sound effects (hits, explosions, pickups, card selection)
 - Win condition + end-of-match screen
 
-***After Phase 4, you have a playable prototype! From there, add wave survival, team mode, more cards, more maps, and eventually battle royale.***
+***After Phase 5, you have a playable prototype! From there, add wave survival, team mode, more cards, more maps, and eventually battle royale.***
+
+---
+
+## 15. Stretch Goals
+
+Features worth building eventually but not required for the prototype. Prioritise only after Phase 5 ships.
+
+### Procedural Voxel Generation from Mesh
+
+Rather than hand-modelling flesh voxels in MagicaVoxel, generate them at runtime by voxelising the Blender mesh geometry directly:
+
+- For each bone mesh (from the .glb skeleton), sample a 3D voxel grid using raycasting or signed-distance-field (SDF) evaluation to determine which grid cells are inside the mesh
+- Fill those cells with voxels coloured to match the character's skin/material
+- Result: the flesh wrapping each bone segment is generated automatically from the Blender model — no manual MagicaVoxel work required
+- Benefits: change a character's proportions in Blender and the voxel body updates automatically; supports arbitrary body shapes and player-created characters
+- Complexity: requires implementing a mesh-to-voxel converter in GDScript or a preprocess step — non-trivial but well-documented algorithm
+
+### Other Stretch Goals
+
+- **Dynamic wound deformation** — hit voxels deform and discolour gradually rather than instantly disappearing; blood pooling fills carved craters
+- **Physics-accurate ragdolls** — on death, swap CharacterBody3D for a fully ragdolled version using Jolt's articulated body system
+- **Procedural NPC variety** — randomise voxel segment dimensions per NPC so no two brawlers look identical
+- **Destructible environment voxels** — walls and floor tiles use the same VoxelSegment system; bullets and explosions carve the arena itself
 
 ---
 

@@ -25,7 +25,7 @@ func _ready() -> void:
 	_spawn_cube_pool()
 	_setup_particles()
 	_create_stain_texture()
-	_spawn_stain_pool()
+	_spawn_stain_pool.call_deferred()
 
 func _spawn_cube_pool() -> void:
 	var mat := StandardMaterial3D.new()

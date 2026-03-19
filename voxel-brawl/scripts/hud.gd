@@ -5,13 +5,23 @@ extends CanvasLayer
 @onready var reload_label: Label = $ReloadLabel
 @onready var weapon_label: Label = $WeaponLabel
 
+var _crosshair: Control
+
 func _ready() -> void:
 	reload_label.visible = false
 	update_ammo(6, 6)
+
+	_crosshair = load("res://scripts/crosshair.gd").new()
+	_crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_crosshair)
+
+func recoil() -> void:
+	_crosshair.recoil()
 
 func update_ammo(current: int, max_ammo: int) -> void:
 	ammo_label.text = "%d / %d" % [current, max_ammo]
 	reload_label.visible = (current == 0)
 
-func set_weapon_name(name: String) -> void:
-	weapon_label.text = "[%s]" % name.to_upper()
+func set_weapon_name(weapon_name: String) -> void:
+	weapon_label.text = "[%s]" % weapon_name.to_upper()

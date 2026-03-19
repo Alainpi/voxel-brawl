@@ -51,3 +51,4 @@ func _attack() -> void:
 		if audio.stream:
 			audio.play()
 		_player.trigger_hit_shake()
+		_player.trigger_crosshair_recoil()

@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://cfgfl5ghvmwbe" path="res://stairs_wide_2.tscn" id="14_8gixj"]
 [ext_resource type="PackedScene" uid="uid://b230ax883pehx" path="res://corridor_end_2.tscn" id="15_hf2sn"]
 [ext_resource type="PackedScene" uid="uid://b0qx71sln06ss" path="res://room_large_2.tscn" id="16_qq5q4"]
+[ext_resource type="PackedScene" uid="uid://brawler0001sc" path="res://scenes/brawler.tscn" id="17_brawl"]
 
 [node name="test_scene" type="Node3D" unique_id=114047288]
 script = ExtResource("1_wtsjf")
@@ -213,3 +214,6 @@ transform = Transform3D(-4.3711385e-08, 0, 0.99999994, 0, 1, 0, -0.99999994, 0, 
 
 [node name="room-large2" parent="." unique_id=777507560 instance=ExtResource("16_qq5q4")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 26)
+
+[node name="Brawler" parent="." unique_id=2066104718 instance=ExtResource("17_brawl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 27.220387)
