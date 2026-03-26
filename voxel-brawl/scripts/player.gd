@@ -254,7 +254,7 @@ func _update_stance_for_weapon(weapon: Node) -> void:
 	var hud := get_node_or_null("/root/test_scene/hud")
 	if hud:
 		if wb.weapon_type == WeaponBase.WeaponType.RANGED:
-			hud.update_stance(StanceManager.Stance.MID, [])
+			hud.update_stance(StanceManager.Stance.MID, [] as Array[StanceManager.Stance])
 		else:
 			hud.update_stance(stance_manager.current_stance(), stance_manager.current_stances())
 
