@@ -4,6 +4,7 @@ extends CanvasLayer
 @onready var ammo_label: Label = $AmmoLabel
 @onready var reload_label: Label = $ReloadLabel
 @onready var weapon_label: Label = $WeaponLabel
+@onready var stance_indicator: HudStanceIndicator = $HudStanceIndicator
 
 var _crosshair: Control
 
@@ -25,3 +26,6 @@ func update_ammo(current: int, max_ammo: int) -> void:
 
 func set_weapon_name(weapon_name: String) -> void:
 	weapon_label.text = "[%s]" % weapon_name.to_upper()
+
+func update_stance(stance: StanceManager.Stance, available: Array[StanceManager.Stance]) -> void:
+	stance_indicator.update(stance, available)
