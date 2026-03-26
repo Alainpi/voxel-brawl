@@ -245,9 +245,9 @@ func _update_stance_for_weapon(weapon: Node) -> void:
 	var wb := weapon as WeaponBase
 	match wb.weapon_type:
 		WeaponBase.WeaponType.BLUNT:
-			stance_manager.setup([StanceManager.Stance.LOW, StanceManager.Stance.MID, StanceManager.Stance.HIGH])
+			stance_manager.setup([StanceManager.Stance.LOW, StanceManager.Stance.MID, StanceManager.Stance.HIGH] as Array[StanceManager.Stance])
 		WeaponBase.WeaponType.SHARP:
-			stance_manager.setup([StanceManager.Stance.LOW, StanceManager.Stance.MID, StanceManager.Stance.HIGH, StanceManager.Stance.THRUST])
+			stance_manager.setup([StanceManager.Stance.LOW, StanceManager.Stance.MID, StanceManager.Stance.HIGH, StanceManager.Stance.THRUST] as Array[StanceManager.Stance])
 		WeaponBase.WeaponType.RANGED:
 			pass  # no setup — scroll is no-op via WeaponMelee check
 	# Always update HUD immediately on equip — setup() does not emit stance_changed
