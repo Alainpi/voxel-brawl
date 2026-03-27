@@ -13,8 +13,10 @@ var attack_anim := "punch"
 var hit_enable_delay := 0.1      # seconds from attack start until hitbox activates
 var hit_window_duration := 0.15  # how long the hitbox stays active
 var max_hits := 1                # max segments hit per swing; subclasses override
-var hit_shape: Shape3D = null    # set by subclass in _configure()
+var hit_shape: Shape3D = null            # set by subclass in _configure()
 var hit_shape_offset: Vector3 = Vector3.ZERO
+var hit_shape_rotation: Vector3 = Vector3.ZERO  # degrees — e.g. Vector3(90,0,0) to align with mesh
+var hit_shape_scale: Vector3 = Vector3.ONE
 
 var _cooldown_timer := 0.0
 var _hit_area: Area3D = null
@@ -45,6 +47,8 @@ func _create_hitarea() -> void:
 		var col := CollisionShape3D.new()
 		col.shape = hit_shape
 		col.position = hit_shape_offset
+		col.rotation_degrees = hit_shape_rotation
+		col.scale = hit_shape_scale
 		col.disabled = true
 		_hit_area.add_child(col)
 	add_child(_hit_area)

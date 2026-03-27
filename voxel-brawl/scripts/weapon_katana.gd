@@ -13,9 +13,11 @@ func _configure() -> void:
 	cooldown = 0.3
 	attack_anim = "katana"
 	var s := BoxShape3D.new()
-	s.size = Vector3(0.08, 0.08, 0.9)   # thin along X/Y, long along Z (mesh rotated 90° X)
+	s.size = Vector3(0.05, 0.6, 0.05)
 	hit_shape = s
-	hit_shape_offset = Vector3(-0.3, 0.35, -0.9)   # mesh center — tune in Remote tab
+	hit_shape_offset = Vector3(-0.3, 0.35, -0.9)
+	hit_shape_rotation = Vector3(90, 0, 0)
+	hit_shape_scale = Vector3(1.0, 4.0, 1.0)
 	hit_enable_delay = 0.1
 	hit_window_duration = 0.15
 	max_hits = 3
