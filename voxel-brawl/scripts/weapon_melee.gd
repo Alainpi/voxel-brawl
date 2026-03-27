@@ -1,5 +1,5 @@
 # scripts/weapon_melee.gd
-# Melee weapon base — sphere overlap hit detection.
+# Melee weapon base — Area3D overlap hit detection with timer-driven activation window.
 # Subclasses override _configure() for stats and _apply_hit() for damage behaviour.
 class_name WeaponMelee
 extends WeaponBase
@@ -7,13 +7,57 @@ extends WeaponBase
 var damage := 10.0
 var voxel_radius := 2.0
 var reach := 0.5
-var hit_sphere_radius := 0.8
 var cooldown := 0.4
 var attack_anim := "punch"
 
+var hit_enable_delay := 0.1      # seconds from attack start until hitbox activates
+var hit_window_duration := 0.15  # how long the hitbox stays active
+var max_hits := 1                # max segments hit per swing; subclasses override
+var hit_shape: Shape3D = null    # set by subclass in _configure()
+var hit_shape_offset: Vector3 = Vector3.ZERO
+
 var _cooldown_timer := 0.0
+var _hit_area: Area3D = null
+var _hit_segments: Array[VoxelSegment] = []
 
 @onready var audio: AudioStreamPlayer3D = $AudioStreamPlayer3D
+
+# _create_hitarea() must come after super() — hit_shape and hit_shape_offset are
+# populated by _configure() inside super(), before _create_hitarea() runs.
+func _ready() -> void:
+	super()
+	_create_hitarea()
+
+# Virtual — override in subclasses to build composite hitbox shapes (e.g. axe with
+# multiple blades). Call super() first to get _hit_area created and area_entered
+# connected, then add additional CollisionShape3D children to _hit_area.
+# If overriding without calling super(), you must create _hit_area and connect
+# area_entered yourself.
+# IMPORTANT: set hit_shape in _configure() for super() to build the primary shape.
+# If hit_shape is null, super() skips the primary CollisionShape3D.
+func _create_hitarea() -> void:
+	_hit_area = Area3D.new()
+	_hit_area.collision_layer = 0
+	_hit_area.collision_mask = 2   # matches VoxelSegment area layer
+	_hit_area.monitorable = false  # other areas cannot detect this hitbox; only this hitbox detects them
+	if hit_shape:
+		var col := CollisionShape3D.new()
+		col.shape = hit_shape
+		col.position = hit_shape_offset
+		col.disabled = true
+		_hit_area.add_child(col)
+	add_child(_hit_area)
+	_hit_area.area_entered.connect(_on_hit_area_entered)
+
+func _enable_hitbox() -> void:
+	for child in _hit_area.get_children():
+		if child is CollisionShape3D:
+			child.disabled = false
+
+func _disable_hitbox() -> void:
+	for child in _hit_area.get_children():
+		if child is CollisionShape3D:
+			child.disabled = true
 
 func _physics_process(delta: float) -> void:
 	_cooldown_timer = maxf(_cooldown_timer - delta, 0.0)
@@ -22,48 +66,30 @@ func _physics_process(delta: float) -> void:
 
 func _attack() -> void:
 	_cooldown_timer = cooldown
+	_hit_segments.clear()
 	_player.play_attack_anim(attack_anim)
-	await get_tree().create_timer(hit_delay).timeout
-	_do_hit()
+	await get_tree().create_timer(hit_enable_delay).timeout
+	if not is_instance_valid(self) or not _player._is_attacking:
+		return   # node freed, or interrupted by death / weapon swap
+	_enable_hitbox()
+	await get_tree().create_timer(hit_window_duration).timeout
+	if is_instance_valid(self):
+		_disable_hitbox()
 
-var hit_delay := 0.15  # seconds into swing when contact occurs — tune per weapon
-
-func _do_hit() -> void:
-	var space := get_world_3d().direct_space_state
-	var params := PhysicsShapeQueryParameters3D.new()
-	params.collision_mask = 2
-	params.collide_with_areas = true
-	params.collide_with_bodies = false
-
-	var mesh := find_child("*", false, false) as MeshInstance3D
-	if mesh and mesh.mesh:
-		var box := BoxShape3D.new()
-		var aabb := mesh.get_aabb()
-		box.size = aabb.size
-		params.shape = box
-		params.transform = mesh.global_transform * Transform3D(Basis.IDENTITY, aabb.get_center())
-	else:
-		# fallback if no mesh found
-		var sphere := SphereShape3D.new()
-		sphere.radius = hit_sphere_radius
-		params.shape = sphere
-		params.transform = Transform3D(Basis.IDENTITY,
-			_player.global_position + Vector3(0, 1.2, 0) + (-_player.global_transform.basis.z * reach)
-		)
-
-	var results := space.intersect_shape(params, 8)
-	var hit_any := false
-
-	for result in results:
-		var area := result.collider as Area3D
-		if area and area.has_meta("voxel_segment"):
-			var seg: VoxelSegment = area.get_meta("voxel_segment")
-			var local_hit := seg.to_local(params.transform.origin)
-			_apply_hit(seg, local_hit)
-			break  # one hit per swing — remove if multi-hit is desired
-			hit_any = true
-
-	if hit_any:
+func _on_hit_area_entered(area: Area3D) -> void:
+	# Filter order: reject non-segments first so environmental areas don't consume hit slots.
+	if not area.has_meta("voxel_segment"):
+		return
+	var seg: VoxelSegment = area.get_meta("voxel_segment")
+	if seg in _hit_segments:
+		return
+	if _hit_segments.size() >= max_hits:
+		return
+	_hit_segments.append(seg)
+	# local_hit uses Area3D origin as approximation — Step 4 replaces with blade-tip sweep.
+	var local_hit := seg.to_local(_hit_area.global_position)
+	_apply_hit(seg, local_hit)
+	if _hit_segments.size() == 1:   # feedback fires once per swing on first hit
 		if audio.stream:
 			audio.play()
 		_player.trigger_hit_shake()
