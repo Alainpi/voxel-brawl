@@ -10,9 +10,16 @@ func _configure() -> void:
 	damage = 22.0
 	voxel_radius = 2.8   # wide blunt impact area
 	reach = 0.9
-	hit_sphere_radius = 1.1
 	cooldown = 0.65
 	attack_anim = "bat"
+	var s := CapsuleShape3D.new()
+	s.radius = 0.15
+	s.height = 0.8
+	hit_shape = s
+	hit_shape_offset = Vector3(0, 0.4, 0)   # offset toward barrel end
+	hit_enable_delay = 0.2
+	hit_window_duration = 0.18
+	max_hits = 2
 
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
 	# Blunt hit: large voxel removal simulates structural crushing.
