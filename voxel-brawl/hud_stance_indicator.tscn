@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://deyr0rhtmlqji"]
+
+[ext_resource type="Script" uid="uid://sard1dq31xeb" path="res://scripts/hud_stance_indicator.gd" id="1_j5n7w"]
+
+[node name="HudStanceIndicator" type="VBoxContainer" unique_id=1168885545]
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_constants/separation = 2
+script = ExtResource("1_j5n7w")
+
+[node name="Row_THRUST" type="HBoxContainer" parent="." unique_id=49129938]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Row_THRUST" unique_id=932782996]
+layout_mode = 2
+text = "THRUST"
+
+[node name="Bar" type="ColorRect" parent="Row_THRUST" unique_id=1348447313]
+custom_minimum_size = Vector2(8, 18)
+layout_mode = 2
+
+[node name="Row_HIGH" type="HBoxContainer" parent="." unique_id=1184947801]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Row_HIGH" unique_id=1330754925]
+layout_mode = 2
+text = "HIGH"
+
+[node name="Bar" type="ColorRect" parent="Row_HIGH" unique_id=1305125227]
+custom_minimum_size = Vector2(8, 18)
+layout_mode = 2
+
+[node name="Row_MID" type="HBoxContainer" parent="." unique_id=33368739]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Row_MID" unique_id=1786456781]
+layout_mode = 2
+text = "MID"
+
+[node name="Bar" type="ColorRect" parent="Row_MID" unique_id=1731246130]
+custom_minimum_size = Vector2(8, 18)
+layout_mode = 2
+
+[node name="Row_LOW" type="HBoxContainer" parent="." unique_id=897937492]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Row_LOW" unique_id=1837822629]
+layout_mode = 2
+text = "LOW"
+
+[node name="Bar" type="ColorRect" parent="Row_LOW" unique_id=179652808]
+custom_minimum_size = Vector2(8, 18)
+layout_mode = 2

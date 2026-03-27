@@ -1,11 +1,16 @@
 [gd_scene format=3 uid="uid://usaygrv80ckp"]
 
-[ext_resource type="PackedScene" uid="uid://b0xitm3xf7f87" path="res://player.tscn" id="1_3vyb7"]
-[ext_resource type="Script" uid="uid://cpyeqj6epvfo8" path="res://scripts/weapon_melee.gd" id="2_g2els"]
-[ext_resource type="Script" uid="uid://qhdei3weau1p" path="res://scripts/weapon_ranged.gd" id="3_qhqgy"]
+[ext_resource type="PackedScene" uid="uid://bcb2r0fxa2poa" path="res://assets/models/player_rig.glb" id="1_y4r1p"]
+[ext_resource type="Script" uid="uid://clkorr8nx3hjc" path="res://scripts/weapon_fists.gd" id="2_y4r1p"]
+[ext_resource type="Script" uid="uid://cjg0e028qa28w" path="res://scripts/weapon_revolver.gd" id="3_d2wvv"]
 [ext_resource type="ArrayMesh" uid="uid://dgvoqqf33nkms" path="res://assets/models/Weapons/Revolver.obj" id="4_dqkch"]
+[ext_resource type="Script" uid="uid://lmskr730xnbd" path="res://scripts/weapon_bat.gd" id="5_3v2ag"]
 [ext_resource type="ArrayMesh" uid="uid://b8wf2l20ep17i" path="res://assets/models/Weapons/Bat.obj" id="5_tuyoq"]
 [ext_resource type="ArrayMesh" uid="uid://b6g60nh4cdtf8" path="res://assets/models/Weapons/Katana.obj" id="6_fjrip"]
+[ext_resource type="ArrayMesh" uid="uid://myxw77h63uyf" path="res://assets/models/Weapons/Shotgun.obj" id="7_fjrip"]
+[ext_resource type="Script" uid="uid://dwse7y3f3gwbr" path="res://scripts/weapon_katana.gd" id="7_jej6c"]
+[ext_resource type="Script" uid="uid://d0k5d1j66nlsg" path="res://scripts/weapon_shotgun.gd" id="9_f1ej7"]
+[ext_resource type="Script" uid="uid://do60ev5tlenm" path="res://scripts/stance_manager.gd" id="11_d2wvv"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_g2els"]
 
@@ -29,9 +34,6 @@ material = SubResource("StandardMaterial3D_qhqgy")
 
 [node name="Player" type="CharacterBody3D" unique_id=1553557232]
 
-[node name="PlayerModel" parent="." unique_id=861182048 instance=ExtResource("1_3vyb7")]
-transform = Transform3D(-1, -8.742278e-08, 8.742278e-08, -8.742278e-08, 1, 0, 8.742278e-08, 7.642742e-15, 1, 0, 0, 0)
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=133137851]
 transform = Transform3D(0.3, 0, 0, 0, 1.8, 0, 0, 0, 0.3, 0, 0.7, 0)
 shape = SubResource("CapsuleShape3D_g2els")
@@ -45,12 +47,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1, 1.5)
 [node name="WeaponHolder" type="Node3D" parent="CameraPivot/Camera3D" unique_id=1518021452]
 
 [node name="Fists" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=1068227265]
-script = ExtResource("2_g2els")
+script = ExtResource("2_y4r1p")
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Fists" unique_id=1188892268]
 
 [node name="Revolver" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=728613075]
-script = ExtResource("3_qhqgy")
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0.5, -2, -1.5)
+script = ExtResource("3_d2wvv")
 
 [node name="AudioShot" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=2139777357]
 
@@ -67,22 +70,45 @@ transform = Transform3D(-8.742278e-09, 4.3711395e-09, -0.1, -0.1, 4.371139e-09, 
 mesh = ExtResource("4_dqkch")
 
 [node name="Bat" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=173873434]
-script = ExtResource("2_g2els")
+transform = Transform3D(-2, 0, -1.7484555e-07, 0, 2, 0, 1.7484555e-07, 0, -2, -1, -0.2, 1)
+script = ExtResource("5_3v2ag")
 metadata/_custom_type_script = "uid://cpyeqj6epvfo8"
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CameraPivot/Camera3D/WeaponHolder/Bat" unique_id=498893696]
-transform = Transform3D(0.2, 0, 0, 0, -8.742278e-09, 0.2, 0, -0.2, -8.742278e-09, 0, 0, 0)
+transform = Transform3D(0.2, 0, 0, 0, -8.742278e-09, 0.2, 0, -0.2, -8.742278e-09, -0.3, 0.4, 0.08)
 mesh = ExtResource("5_tuyoq")
 
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Bat" unique_id=1195523928]
+
 [node name="Katana" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=1513135254]
-script = ExtResource("2_g2els")
+transform = Transform3D(2, -1.7484555e-07, -1.7484555e-07, -1.7484555e-07, -2, 0, -1.7484555e-07, 1.5285484e-14, -2, 0.45, 1.05, 1)
+script = ExtResource("7_jej6c")
 metadata/_custom_type_script = "uid://cpyeqj6epvfo8"
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CameraPivot/Camera3D/WeaponHolder/Katana" unique_id=308467956]
-transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, 0, 0, 0)
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -1.05, 0.15, -0.6)
 mesh = ExtResource("6_fjrip")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Katana" unique_id=2013968728]
+
+[node name="Shotgun" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder" unique_id=1012879059]
+transform = Transform3D(2, 0, 0, 0, 3, 0, 0, 0, 2, 0.5, -3.3, -1.5)
+script = ExtResource("9_f1ej7")
+metadata/_custom_type_script = "uid://qhdei3weau1p"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CameraPivot/Camera3D/WeaponHolder/Shotgun" unique_id=173030982]
+transform = Transform3D(1.9106854e-16, 4.371139e-09, 0.1, 0.1, -4.371139e-09, 0, 4.371139e-09, 0.1, -4.371139e-09, -0.15, 1.8, -0.35)
+mesh = ExtResource("7_fjrip")
+
+[node name="AudioShot" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Shotgun" unique_id=27521326]
 
 [node name="RayCast3D" type="RayCast3D" parent="CameraPivot/Camera3D" unique_id=1883128150]
 target_position = Vector3(0, 0, -50)
 collision_mask = 2
 collide_with_areas = true
+
+[node name="PlayerModel" parent="." unique_id=2138265789 instance=ExtResource("1_y4r1p")]
+transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
+
+[node name="StanceManager" type="Node" parent="." unique_id=1472633680]
+script = ExtResource("11_d2wvv")
