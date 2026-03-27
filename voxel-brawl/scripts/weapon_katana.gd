@@ -10,9 +10,15 @@ func _configure() -> void:
 	damage = 45.0
 	voxel_radius = 0.7   # thin precise slice — surgical removal
 	reach = 1.0
-	hit_sphere_radius = 1.0
 	cooldown = 0.3
 	attack_anim = "katana"
+	var s := BoxShape3D.new()
+	s.size = Vector3(0.05, 0.6, 0.05)
+	hit_shape = s
+	hit_shape_offset = Vector3(0, 0.3, 0)   # offset toward blade tip
+	hit_enable_delay = 0.1
+	hit_window_duration = 0.15
+	max_hits = 3
 
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
 	# Sharp slice: thin cut but extreme damage forces immediate detach threshold check.
