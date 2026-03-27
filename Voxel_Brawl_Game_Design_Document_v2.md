@@ -6,7 +6,7 @@
 **Target: Playable Prototype in 1–3 Months**
 Platforms: Windows & macOS | Players: Up to 8 | Online (Direct IP)
 
-*v3.0 — Updated with runtime voxel destruction architecture + top-down camera & fog-of-war FOV*
+*v3.1 — Updated with 14-bone hierarchy, hand segments, cascade detachment system, and segment state machine (BROKEN/DETACHED)*
 
 ---
 
@@ -468,12 +468,41 @@ This is new — prototype the hardest system first before building anything else
 
 **Goal: Full dismemberment system + 4–5 weapons working + player mobility + destructible player.**
 
+**Character Foundation (do first — everything else is tuned against this)**
+
+Build the final character art now so that all destruction tuning, weapon positioning, and animation polish is based on a finalized foundation. The 14-bone hierarchy is modelled and rigged here; the code to support it is wired up in Phase 3.
+
+*Flesh segments (visible, destructible):*
+- Model 14 flesh .vox segments in MagicaVoxel matching the 14-bone hierarchy: torso_bottom, torso_top, head_bottom, head_top, arm_r_upper, arm_r_fore, **hand_r**, arm_l_upper, arm_l_fore, **hand_l**, leg_r_upper, leg_r_fore, leg_l_upper, leg_l_fore
+- Export each as a .vox file — do NOT export as OBJ. Voxel data must remain raw for runtime destruction.
+- Flesh segments should have a consistent skin color palette
+- Hands (`hand_l`, `hand_r`) double as the weapon holder attachment points — losing a hand disables weapon equipping for that side (two-handed weapons require both hands intact)
+
+*Inner bone segments (hidden until flesh is carved away):*
+- Model 14 matching bone .vox segments in MagicaVoxel — one per flesh segment, same shape but smaller, painted in a distinct bone color (off-white/yellow)
+- These sit inside the flesh segments and become visible as voxels are removed
+- Export each as a .vox file
+
+*Blender rig:*
+- Build a 14-bone skeleton in Blender matching the hierarchy below. Bone names must match exactly — they are used as keys in `PLAYER_SEGMENT_CONFIG`.
+- The `weapon-right` and `weapon-left` attachment bones are replaced by the `hand_r` and `hand_l` bones — weapons attach directly to the hand bones
+- Add all required animations: idle, walk, punch (melee attack), holding-right (ranged idle), holding-right-shoot (ranged fire), plus distinct animations for bat swing and katana slash
+- Export as .glb
+
+*Integration (Phase 2 — uses existing 6-segment code as placeholder):*
+- Replace the current Kenney `character-a.glb` placeholder with the new rig in `player.tscn`
+- Map the 6 main segments (torso_bottom, skull_top, arm_l_upper, arm_r_upper, leg_l_upper, leg_r_upper) to the existing 6-slot `PLAYER_SEGMENT_CONFIG` so the character works immediately with current code
+- Full 12-segment wiring happens in Phase 3 once hierarchy propagation is implemented
+- Verify the character animates and destructs correctly before continuing
+
+**Combat & Dismemberment**
+
 - Attach runtime voxel meshes to player skeleton bones via BoneAttachment3D (replaces static Blender mesh — player becomes destructible)
 - Basic NPC enemy (Brawler) with chase AI using NavigationAgent3D
 - Implement limb HP system based on remaining voxel count per body segment
 - Limb detachment: detach body segment node, add RigidBody3D, apply force
 - Detached limbs remain destructible (keep their voxel grid)
-- **Visible weapon models:** add `weapon-right` bone to Blender rig (child of `arm-right`), move WeaponHolder from Camera3D to a BoneAttachment3D on that bone so weapons appear in world space on the character; model each weapon in MagicaVoxel, export OBJ, attach as MeshInstance3D child of each weapon node
+- **Visible weapon models:** move WeaponHolder to a BoneAttachment3D on the `weapon-right` bone so weapons appear in world space on the character; model each weapon in MagicaVoxel, export OBJ, attach as MeshInstance3D child of each weapon node
 - Add 2 melee weapons (bat, katana) + 2 ranged (revolver, shotgun)
 - Weapon pickup system (walk over to grab)
 - Health bar UI
@@ -495,40 +524,68 @@ This is new — prototype the hardest system first before building anything else
 
 ### Phase 3: Skeletal Destruction (Weeks 9–11)
 
-**Goal: Replace the 6-segment voxel body with a 12-bone anatomical skeleton for granular dismemberment.**
+**Goal: Wire up the 12-bone character art (built in Phase 2) fully in code for granular dismemberment.**
 
-The core idea: each character has 12 individually destructible bone segments arranged in a parent-child hierarchy. Severing the connection between two bones severs everything below it in the chain — cut the elbow and the forearm flies off; cut the knee and the lower leg goes with it. Weapons like swords become far more meaningful because the exact voxels hit determine which joint breaks.
+The art foundation — 14 flesh segments, 14 inner bone segments, and the 14-bone Blender rig — is already complete from Phase 2. Phase 3 is entirely code work: hierarchy propagation, upgrading character scripts from 6 to 14 segments, and tuning.
 
-**12-Bone Hierarchy:**
+The core idea: each character has 14 individually destructible bone segments arranged in a parent-child hierarchy. Severing the connection between two bones severs everything below it in the chain — cut the elbow and the forearm flies off; cut the knee and the lower leg goes with it. No joint geometry is needed — the segment boundaries ARE the joints.
+
+**14-Bone Hierarchy:**
 
 ```
 torso_bottom (pelvis) — root, anchor, never detaches independently
  ├── torso_top (ribcage/spine)
- │    ├── skull_bottom (jaw/neck)
- │    │    └── skull_top (cranium)
+ │    ├── head_bottom (jaw/neck)
+ │    │    └── head_top (cranium)
  │    ├── arm_r_upper (humerus)
- │    │    └── arm_r_fore (radius/ulna)
+ │    │    └── arm_r_fore (radius/ulna — proximal end = elbow joint)
+ │    │         └── hand_r  ← weapon holder, detachment = weapon disabled
  │    └── arm_l_upper
  │         └── arm_l_fore
+ │              └── hand_l  ← weapon holder, detachment = weapon disabled
  ├── leg_r_upper (femur)
- │    └── leg_r_fore (tibia/fibula)
+ │    └── leg_r_fore (tibia/fibula — proximal end = knee joint)
  └── leg_l_upper
       └── leg_l_fore
 ```
 
-**Art Pipeline:**
+**Naming convention:**
+- Flesh segments (outer character, built in Phase 2): `torso_bottom`, `torso_top`, `head_bottom`, `head_top`, `arm_r_upper`, `arm_r_fore`, `hand_r`, `arm_l_upper`, `arm_l_fore`, `hand_l`, `leg_r_upper`, `leg_r_fore`, `leg_l_upper`, `leg_l_fore`
+- Inner bone segments (skeleton, built in Phase 3): `skull_bottom`, `skull_top`, `spine_bottom`, `spine_top`, `humerus_r`, `radius_r`, `metacarpal_r`, `humerus_l`, `radius_l`, `metacarpal_l`, `femur_r`, `tibia_r`, `femur_l`, `tibia_l`
 
-- Model 12 distinct bone .vox pieces in MagicaVoxel — painted with a unique bone color so they visually read as skeleton when flesh is carved away
-- Rig corresponding skeleton in Blender with 12 bones matching the hierarchy above; export as .glb
-- In Godot, each bone piece loads as a VoxelSegment attached to its Blender bone via BoneAttachment3D — same pipeline as the current 6-segment system, just doubled in resolution
-- Flesh voxels wrap the bone models; interior voxels auto-detect as higher-HP bone material (current system already handles this)
+**Cascade Detachment System:**
+
+The hierarchy above encodes every detachment rule. Implementation: each VoxelSegment holds a reference to its parent and a list of children. When any segment detaches, iterate its children recursively and detach them all.
+
+Key rules:
+- **Elbow cut:** Katana hits `arm_r_fore` → `arm_r_fore` + `hand_r` detach. `arm_r_upper` stays. Only the forearm falls.
+- **Shoulder cut:** Katana hits `arm_r_upper` → `arm_r_upper` + `arm_r_fore` + `hand_r` all detach. Full arm gone.
+- **Knee cut:** Same pattern for legs — `leg_r_fore` detach only = lower leg gone. `leg_r_upper` detach = full leg gone.
+- **No joint segments needed:** The segment boundary IS the joint. `arm_r_fore` starting at the elbow means the elbow is destroyed when that segment's HP hits zero.
+
+**Segment State Machine:**
+
+Each segment has three states, not two:
+
+```
+HEALTHY → (break_threshold) → BROKEN → (detach_threshold) → DETACHED
+```
+
+- **BROKEN:** Segment stays attached. For arm segments — the weapon held in that hand is disabled. Visually: inner bone voxel color shifts (purple-grey bruise). Implemented as a `structural_integrity` float on VoxelSegment, separate from voxel HP. Drops on blunt impact, does not regenerate.
+- **DETACHED:** Standard cascade detach — node removed from skeleton, RigidBody3D applied, physics takes over.
+
+This is how blunt-force bone-breaking works without detachment: bat hits `arm_r_upper` repeatedly → `structural_integrity` drops to zero → BROKEN state → player can't equip or swing weapons in right hand, but the arm stays attached. A further hit past `detach_threshold` causes full detachment with cascade.
 
 **Code Changes Required:**
 
-- Add hierarchy propagation to VoxelSegment: when a segment detaches, all child segments in the hierarchy detach with it (e.g. upper arm severs → forearm flies off with it)
-- Update character scripts (Player, Brawler, Dummy) from 6 segments to 12 with correct parent-child bone references
-- Tune per-bone detachment thresholds: skull top is fragile, pelvis is very tough
+- Add hierarchy propagation to VoxelSegment: when a segment detaches, iterate `_children` array and call `detach()` recursively
+- Add `structural_integrity` float and BROKEN state to VoxelSegment; emit `segment_broken` signal when threshold crossed
+- Add weapon slot disable logic: player listens for `segment_broken` on `hand_r`/`hand_l`/arm segments and disables the corresponding weapon slot
+- Update `PLAYER_SEGMENT_CONFIG` in `player.gd` from 6 slots to all 14, mapping each flesh + bone .vox pair to the correct bone
+- Update Brawler and Dummy scripts from 6 segments to 14 with correct parent-child bone references
+- Tune per-bone thresholds: skull top is fragile, pelvis is very tough; hands are fragile (small target, low HP)
 - Update leg-loss crawl logic: losing a foreleg vs upper leg produces different speed penalties
+- Wire inner bone segments: load bone .vox alongside flesh .vox per segment, render at lower opacity until flesh voxel count drops below a threshold
 
 **Why this matters for gameplay:**
 
@@ -536,6 +593,17 @@ torso_bottom (pelvis) — root, anchor, never detaches independently
 - Head split: a slash across the skull top produces a partial decapitation while the jaw/neck remains
 - Players can still fight with severed upper arm (torso intact), but lose the arm entirely if the humerus goes
 - Bleed-through destruction: carving flesh exposes the bone beneath, which then takes more hits to destroy
+- Hand loss: losing `hand_r` prevents equipping any weapon in the right slot; losing both hands prevents two-handed weapons
+
+**Weapon Polish (deferred from Phase 2):**
+
+These weapon behaviours depend on the 14-bone system and are implemented here once the skeleton is in place:
+
+- **Bat — bone degradation:** Blunt hits reduce `structural_integrity` per bone segment without clean severing. A heavily battered arm enters BROKEN state (unusable, can't hold weapon, no attack) but stays attached. When `structural_integrity` hits zero the limb hangs limp. A further hit past `detach_threshold` causes full cascade detachment.
+- **Katana — bleed:** Sharp hits start a timed voxel drain on the struck segment (e.g. lose N voxels/sec for 3 seconds). Stacks on repeated hits. Implement as a timer + drain coroutine on VoxelSegment, triggered from `WeaponKatana._apply_hit()`.
+- **Katana — forced sever:** A single clean katana hit to an arm or leg at full damage should push the segment past its detach threshold immediately, regardless of remaining voxel count. Add a `force_detach` flag to `DamageManager.process_hit()`.
+- **Attack animations per weapon:** Add distinct attack animations in Blender for bat swing, katana slash, and shotgun pump. Map them in `play_attack_anim()` once animations are exported.
+- **Weapon-specific hit feedback:** Distinct audio, screen shake intensity, and particle colour per weapon type (e.g. red splatter for katana, grey dust for bat).
 
 ### Phase 4: Multiplayer (Weeks 12–14)
 

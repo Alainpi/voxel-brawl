@@ -116,7 +116,7 @@ func _get_attachment_ref_pos() -> Vector3:
 	if body == null:
 		return Vector3.INF
 	# Use the torso segment's position as the attachment reference
-	var torso: Node = body.find_child("VoxelSegment_torso", true, false)
+	var torso: Node = body.find_child("VoxelSegment_torso_bottom", true, false)
 	if torso is Node3D:
 		return (torso as Node3D).global_position
 	return (body as Node3D).global_position
@@ -390,13 +390,14 @@ func _spawn_debris_from(removed: Array[Vector3i], colors: Dictionary, hit_origin
 	sorted.sort_custom(func(a, b):
 		return (Vector3(a) * VOXEL_SIZE).distance_to(hit_origin) < (Vector3(b) * VOXEL_SIZE).distance_to(hit_origin)
 	)
+	var hit_world := to_global(hit_origin)
 	var physics_count := mini(8, sorted.size())
 	for i in physics_count:
-		var world_pos := global_position + Vector3(sorted[i]) * VOXEL_SIZE
-		var impulse := (world_pos - global_position - hit_origin).normalized() * randf_range(2.0, 5.0)
+		var world_pos := to_global(Vector3(sorted[i]) * VOXEL_SIZE)
+		var impulse := (world_pos - hit_world).normalized() * randf_range(2.0, 5.0)
 		impulse.y += randf_range(1.0, 3.0)
 		debris_pool.spawn_cube(world_pos, colors.get(sorted[i], Color.WHITE), impulse)
-	debris_pool.spawn_particles(global_position + hit_origin)
+	debris_pool.spawn_particles(hit_world)
 
 func _cluster_center_local(cluster: Array[Vector3i]) -> Vector3:
 	var sum := Vector3.ZERO

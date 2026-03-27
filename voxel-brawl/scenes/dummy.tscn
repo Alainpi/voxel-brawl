@@ -1,6 +1,10 @@
 [gd_scene format=3 uid="uid://dtadyc3unam5r"]
 
 [ext_resource type="Script" uid="uid://xhflmornlvle" path="res://scripts/dummy.gd" id="1_kre8v"]
+[ext_resource type="PackedScene" uid="uid://bcb2r0fxa2poa" path="res://assets/models/player_rig.glb" id="2_k5f3b"]
 
 [node name="Dummy" type="Node3D" unique_id=253904822]
 script = ExtResource("1_kre8v")
+
+[node name="PlayerModel" parent="." unique_id=442273515 instance=ExtResource("2_k5f3b")]
+transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
