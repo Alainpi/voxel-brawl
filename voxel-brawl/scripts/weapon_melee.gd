@@ -19,6 +19,7 @@ var hit_shape_offset: Vector3 = Vector3.ZERO
 var _cooldown_timer := 0.0
 var _hit_area: Area3D = null
 var _hit_segments: Array[VoxelSegment] = []
+var _own_segment_set: Dictionary = {}  # VoxelSegment -> true, lazy-populated on first use
 
 @onready var audio: AudioStreamPlayer3D = $AudioStreamPlayer3D
 
@@ -81,7 +82,12 @@ func _on_hit_area_entered(area: Area3D) -> void:
 	if not area.has_meta("voxel_segment"):
 		return
 	var seg: VoxelSegment = area.get_meta("voxel_segment")
-	if seg in _player.segments.values():   # don't hit own body segments
+	# Lazy-populate own segment set (player builds segments deferred, so segments dict
+	# may be empty when weapon _ready() fires — populate on first area_entered instead).
+	if _own_segment_set.is_empty() and not _player.segments.is_empty():
+		for s: VoxelSegment in _player.segments.values():
+			_own_segment_set[s] = true
+	if seg in _own_segment_set:   # O(1) hash lookup — no allocation
 		return
 	if seg in _hit_segments:
 		return
