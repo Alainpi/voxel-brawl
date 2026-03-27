@@ -55,6 +55,7 @@ var _legs_lost: int = 0
 var _weapon_anchor: Node3D = null
 
 var _current_weapon: Node = null
+var _is_attacking: bool = false
 var _cam_rotating := false
 var _cam_velocity := 0.0   # rad/s — persists after release for slide
 var _cam_drag_x := 0.0     # pixel accumulator between physics ticks
@@ -103,16 +104,17 @@ func _ready() -> void:
 	shotgun.ammo_changed.connect(_on_ammo_changed)
 	_equip_weapon.call_deferred(fists)
 	stance_manager.stance_changed.connect(_on_stance_changed)
+	anim_player.animation_finished.connect(_on_anim_finished)
 	call_deferred("_build_voxel_body")
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			_cam_rotating = event.pressed
-		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			if _current_weapon is WeaponMelee:
 				stance_manager.cycle(1)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			if _current_weapon is WeaponMelee:
 				stance_manager.cycle(-1)
 
@@ -204,9 +206,7 @@ func get_mouse_world_pos() -> Vector3:
 	return ray_origin + ray_dir * t
 
 func _update_animation(_dir: Vector3) -> void:
-	# Don't interrupt an attack animation mid-play
-	var cur := anim_player.current_animation
-	if anim_player.is_playing() and cur in ["punch-right", "holding-right-shoot", "bat-swing", "katana-slash"]:
+	if _is_attacking:
 		return
 	if _current_weapon == revolver or _current_weapon == shotgun:
 		anim_player.play("holding-right")
@@ -222,6 +222,7 @@ func _update_animation(_dir: Vector3) -> void:
 			anim_player.play("idle")
 
 func _equip_weapon(weapon: Node) -> void:
+	_is_attacking = false
 	fists.visible = (weapon == fists)
 	revolver.visible = (weapon == revolver)
 	bat.visible = (weapon == bat)
@@ -278,19 +279,21 @@ func trigger_crosshair_recoil() -> void:
 		hud.recoil()
 
 func play_attack_anim(anim_name: String) -> void:
-	var mapped := anim_name
+	var mapped: String
 	if anim_name == "shoot":
 		mapped = "holding-right-shoot"
-	elif anim_name == "punch":
-		mapped = "punch-right"
-	elif anim_name == "bat":
-		mapped = "bat-swing"
-	elif anim_name == "katana":
-		mapped = "katana-slash"
+	else:
+		var stance_key := StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
+		mapped = anim_name + "_" + stance_key
+	if not anim_player.has_animation(mapped):
+		push_error("play_attack_anim: animation not found: " + mapped)
+		return
+	_is_attacking = true
 	anim_player.stop()
 	anim_player.play(mapped)
 
-
+func _on_anim_finished(_anim_name: String) -> void:
+	_is_attacking = false
 
 func _build_voxel_body() -> void:
 	# Hide the original GLB meshes — skeleton stays alive to drive animations
