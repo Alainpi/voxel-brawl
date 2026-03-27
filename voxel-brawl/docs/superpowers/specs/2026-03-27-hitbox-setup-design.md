@@ -62,6 +62,8 @@ var _hit_segments: Array[VoxelSegment] = []
 
 ### `_ready()` override
 
+`_create_hitarea()` must come after `super()` — `hit_shape` and `hit_shape_offset` are set by `_configure()` inside `super()`, so they must be populated before the hitbox is built.
+
 ```gdscript
 func _ready() -> void:
     super()          # WeaponBase._ready(): calls _configure(), sets _player
@@ -77,7 +79,7 @@ func _create_hitarea() -> void:
     _hit_area = Area3D.new()
     _hit_area.collision_layer = 0
     _hit_area.collision_mask = 2   # matches VoxelSegment area layer
-    _hit_area.monitorable = false
+    _hit_area.monitorable = false  # other areas cannot detect this hitbox; only this hitbox detects them
     if hit_shape:
         var col := CollisionShape3D.new()
         col.shape = hit_shape
@@ -106,31 +108,38 @@ func _disable_hitbox() -> void:
 
 ### `_attack()` — revised
 
+Both `await` calls require a freed-node guard. In Godot 4, a coroutine resumes even if the node that spawned it has been freed (e.g. player dies mid-windup). Calling `_enable_hitbox()` or `_disable_hitbox()` on a freed `_hit_area` crashes. `is_instance_valid(self)` catches this.
+
 ```gdscript
 func _attack() -> void:
     _cooldown_timer = cooldown
     _hit_segments.clear()
     _player.play_attack_anim(attack_anim)
     await get_tree().create_timer(hit_enable_delay).timeout
-    if not _player._is_attacking:
-        return   # interrupted by death or weapon swap
+    if not is_instance_valid(self) or not _player._is_attacking:
+        return   # node freed, or interrupted by death / weapon swap
     _enable_hitbox()
     await get_tree().create_timer(hit_window_duration).timeout
-    _disable_hitbox()
+    if is_instance_valid(self):
+        _disable_hitbox()
 ```
 
 ### `_on_hit_area_entered()`
 
 Applies damage immediately on first overlap per segment. Audio and shake fire on the first hit only per swing.
 
+Guard order matters: `has_meta` and dedup checks come before `max_hits`. Non-segment areas (environment triggers, ranged weapon zones) must be filtered out first — checking `max_hits` first would consume a hit slot for non-segment overlaps without registering damage.
+
+`local_hit` uses `_hit_area.global_position` (the Area3D origin) as the hit point approximation. For weapons with a large `hit_shape_offset`, this will be noticeably wrong — the voxel crater will appear at the weapon handle rather than the barrel tip. This is a known Step 3 limitation; Step 4 (blade-tip sweep raycast) replaces it with the exact contact point.
+
 ```gdscript
 func _on_hit_area_entered(area: Area3D) -> void:
-    if _hit_segments.size() >= max_hits:
-        return
     if not area.has_meta("voxel_segment"):
         return
     var seg: VoxelSegment = area.get_meta("voxel_segment")
     if seg in _hit_segments:
+        return
+    if _hit_segments.size() >= max_hits:
         return
     _hit_segments.append(seg)
     var local_hit := seg.to_local(_hit_area.global_position)
@@ -168,19 +177,28 @@ Example for a double-bitted axe:
 
 ```gdscript
 # weapon_axe.gd
-func _create_hitarea() -> void:
-    super()  # sets up _hit_area and connects area_entered
-    # Add second shape for lower axe blade
-    var beard := CollisionShape3D.new()
+func _configure() -> void:
+    # hit_shape drives the primary (upper) blade via super()._create_hitarea()
     var s := BoxShape3D.new()
     s.size = Vector3(0.4, 0.15, 0.05)
-    beard.shape = s
+    hit_shape = s
+    hit_shape_offset = Vector3(0, 0.2, 0)
+    max_hits = 2
+    # ... other stats
+
+func _create_hitarea() -> void:
+    super()  # builds _hit_area, adds primary shape from hit_shape, connects area_entered
+    # Add second shape for lower axe blade (beard)
+    var beard := CollisionShape3D.new()
+    var s2 := BoxShape3D.new()
+    s2.size = Vector3(0.4, 0.15, 0.05)
+    beard.shape = s2
     beard.position = Vector3(0, -0.2, 0)
     beard.disabled = true
     _hit_area.add_child(beard)
 ```
 
-No other method changes needed — `_enable_hitbox()` / `_disable_hitbox()` pick up the new child automatically.
+`hit_shape` must be set in `_configure()` for the primary blade. If `hit_shape` is `null` when `super()` runs, the `if hit_shape:` guard skips the primary shape and only the beard is built. No other method changes needed — `_enable_hitbox()` / `_disable_hitbox()` pick up all children automatically.
 
 ---
 
@@ -201,7 +219,10 @@ No other method changes needed — `_enable_hitbox()` / `_disable_hitbox()` pick
 
 - Swinging any melee weapon and connecting with a VoxelSegment registers a hit
 - The same segment is not hit twice in a single swing
+- Non-segment areas (environment, other weapon zones) entering the hitbox do not consume a hit slot or register damage
 - `max_hits` cap is respected (bat hits at most 2 segments, katana 3)
-- Weapon swap or death during windup does not trigger the hitbox
+- Weapon swap during windup (before hitbox enables) does not trigger the hitbox
+- Player death during windup does not trigger the hitbox and does not crash
 - Audio and shake fire exactly once per swing that connects
 - Misses produce no feedback
+- Known limitation: voxel craters appear at the Area3D origin (weapon root), not the blade contact point — this is fixed in Step 4
