@@ -38,6 +38,8 @@ These names must match exactly what is present in the imported `player_rig.glb` 
 
 The weapon's existing `attack_anim` field already holds the correct prefix (`"punch"`, `"bat"`, `"katana"`). No weapon files change.
 
+Fists and bat are BLUNT weapons — StanceManager only gives them `[LOW, MID, HIGH]`, so `punch_thrust` and `bat_thrust` are never constructed at runtime.
+
 ---
 
 ## 3. Changes to `player.gd`
@@ -52,44 +54,50 @@ var _is_attacking: bool = false
 
 Old behavior: mapped a handful of hardcoded short names to full animation names with dashes.
 
-New behavior: builds the animation name from weapon prefix + current stance for melee; keeps the `"shoot"` special case unchanged.
+New behavior: builds the animation name from weapon prefix + current stance for melee; keeps the `"shoot"` special case unchanged. Guards against missing animation names to prevent `_is_attacking` from getting stuck.
 
 ```gdscript
 func play_attack_anim(anim_name: String) -> void:
-    var mapped: String
-    if anim_name == "shoot":
-        mapped = "holding-right-shoot"
-    else:
-        var stance_key := StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
-        mapped = anim_name + "_" + stance_key
-    _is_attacking = true
-    anim_player.stop()
-    anim_player.play(mapped)
+	var mapped: String
+	if anim_name == "shoot":
+		mapped = "holding-right-shoot"
+	else:
+		var stance_key := StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
+		mapped = anim_name + "_" + stance_key
+	if not anim_player.has_animation(mapped):
+		push_error("play_attack_anim: animation not found: " + mapped)
+		return
+	_is_attacking = true
+	anim_player.stop()
+	anim_player.play(mapped)
 ```
 
 `StanceManager.Stance.find_key(stance)` returns the enum key name as a string (`"LOW"`, `"MID"`, etc.). `.to_lower()` converts it to `"low"`, `"mid"`, etc.
 
+The `has_animation()` guard prevents `_is_attacking` from being set true when an animation name is invalid. Without it, a missing animation would set `_is_attacking = true` with no `animation_finished` ever firing, permanently blocking locomotion. In normal play this guard never triggers — it exists to surface naming mismatches immediately during development.
+
 ### 3c. `_update_animation()` — updated guard
 
-Old:
+Replace lines:
 ```gdscript
+var cur := anim_player.current_animation
 if anim_player.is_playing() and cur in ["punch-right", "holding-right-shoot", "bat-swing", "katana-slash"]:
     return
 ```
 
-New:
+With:
 ```gdscript
 if _is_attacking:
     return
 ```
 
-The `cur` variable is no longer needed for this check and can be removed if it has no other use.
+Remove the `cur` variable — it is no longer used elsewhere in the function.
 
 ### 3d. `_on_anim_finished()` — new handler
 
 ```gdscript
 func _on_anim_finished(_anim_name: String) -> void:
-    _is_attacking = false
+	_is_attacking = false
 ```
 
 Connected in `_ready()`:
@@ -98,6 +106,16 @@ anim_player.animation_finished.connect(_on_anim_finished)
 ```
 
 `animation_finished` only fires for non-looping animations. Since idle, walk, and hold animations are set to loop in the Godot import settings, only attack animations trigger this signal. No additional filtering needed.
+
+### 3e. `_equip_weapon()` — reset `_is_attacking`
+
+Add `_is_attacking = false` as the first line of `_equip_weapon()`. This handles weapon switch mid-attack: without it, `_is_attacking` stays true after the switch and `_update_animation()` keeps returning early, locking the player in the old attack animation until it finishes (or never finishes if it was interrupted).
+
+```gdscript
+func _equip_weapon(weapon: Node) -> void:
+	_is_attacking = false
+	# ... rest of existing body unchanged
+```
 
 ---
 
@@ -120,5 +138,6 @@ anim_player.animation_finished.connect(_on_anim_finished)
 - Equip katana, scroll to THRUST, attack → `katana_thrust` plays
 - Equip revolver, shoot → `holding-right-shoot` plays, unchanged
 - Switching weapons resets stance to MID → attacking immediately after equip plays the `_mid` variant
+- Switching weapons mid-attack → locomotion resumes immediately on new weapon, not stuck in old attack animation
 - Locomotion resumes after attack animation finishes (`_is_attacking` clears correctly)
 - No errors in Output panel for any of the above
