@@ -283,7 +283,7 @@ func play_attack_anim(anim_name: String) -> void:
 	if anim_name == "shoot":
 		mapped = "holding-right-shoot"
 	else:
-		var stance_key := StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
+		var stance_key: String = StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
 		mapped = anim_name + "_" + stance_key
 	if not anim_player.has_animation(mapped):
 		push_error("play_attack_anim: animation not found: " + mapped)
