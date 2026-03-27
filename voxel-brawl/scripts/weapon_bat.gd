@@ -12,11 +12,10 @@ func _configure() -> void:
 	reach = 0.9
 	cooldown = 0.65
 	attack_anim = "bat"
-	var s := CapsuleShape3D.new()
-	s.radius = 0.15
-	s.height = 0.8
+	var s := BoxShape3D.new()
+	s.size = Vector3(0.3, 0.3, 0.8)   # wide along X/Y, long along Z (mesh rotated 90° X)
 	hit_shape = s
-	hit_shape_offset = Vector3(0, 0.4, 0)   # offset toward barrel end
+	hit_shape_offset = Vector3(-0.35, 0.35, -0.6)   # mesh center — tune in Remote tab
 	hit_enable_delay = 0.2
 	hit_window_duration = 0.18
 	max_hits = 2
