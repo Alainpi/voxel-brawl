@@ -81,6 +81,8 @@ func _on_hit_area_entered(area: Area3D) -> void:
 	if not area.has_meta("voxel_segment"):
 		return
 	var seg: VoxelSegment = area.get_meta("voxel_segment")
+	if seg in _player.segments.values():   # don't hit own body segments
+		return
 	if seg in _hit_segments:
 		return
 	if _hit_segments.size() >= max_hits:
