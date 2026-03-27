@@ -293,7 +293,8 @@ func play_attack_anim(anim_name: String) -> void:
 	anim_player.play(mapped)
 
 func _on_anim_finished(_anim_name: String) -> void:
-	_is_attacking = false
+	if _is_attacking:
+		_is_attacking = false
 
 func _build_voxel_body() -> void:
 	# Hide the original GLB meshes — skeleton stays alive to drive animations
@@ -382,4 +383,5 @@ func _on_player_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
 
 func _die() -> void:
 	_is_dead = true
+	_is_attacking = false
 	print("Player died! (TODO Task 6: death/respawn)")
