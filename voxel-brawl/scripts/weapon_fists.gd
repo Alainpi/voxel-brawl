@@ -18,7 +18,7 @@ func _configure() -> void:
 	max_hits = 1
 
 func _create_hitarea() -> void:
-	super()   # builds _hit_area, adds right-fist sphere from hit_shape, connects signal
+	super()   # builds _hit_area, adds right-fist sphere from hit_shape
 	# Left fist — same shape, mirrored on X. Tune x_offset in-game via Remote tab.
 	var left := CollisionShape3D.new()
 	var s := SphereShape3D.new()
