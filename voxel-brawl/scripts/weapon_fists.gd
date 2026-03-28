@@ -25,14 +25,4 @@ func _create_hitarea() -> void:
 	s.radius = 0.3
 	left.shape = s
 	left.position = Vector3(-0.5, 0, -0.3)   # tune X until left knuckle aligns
-	left.disabled = true
 	_hit_area.add_child(left)
-
-func _create_sweep_markers() -> void:
-	super()
-	# Right fist only — WeaponMelee supports one tip/base pair.
-	# The left CollisionShape3D in _create_hitarea() becomes inert in Step 4
-	# (monitoring disabled). max_hits = 1 means a single fist ray is sufficient.
-	# Clean up left-fist shape in Step 6 if it adds no value.
-	_blade_tip.position = Vector3(0.0, 0.0, -0.4)      # right knuckles
-	_blade_base.position = Vector3(0.0, 0.0, -0.1)     # right wrist

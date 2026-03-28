@@ -18,8 +18,8 @@ func _configure() -> void:
 	hit_shape_offset = Vector3(-0.3, 0.35, -0.9)
 	hit_shape_rotation = Vector3(90, 0, 0)
 	hit_shape_scale = Vector3(1.0, 4.0, 1.0)
-	hit_enable_delay = 0.1
-	hit_window_duration = 0.15
+	hit_enable_delay = 0.0
+	hit_window_duration = 0.4
 	max_hits = 3
 
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
@@ -27,8 +27,3 @@ func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
 	# A single clean hit to an arm or leg should sever it.
 	DamageManager.process_hit(seg, local_hit, voxel_radius, damage)
 	# TODO: start bleed timer on seg — drain N voxels per second for 3s after hit.
-
-func _create_sweep_markers() -> void:
-	super()
-	_blade_tip.position = Vector3(-0.3, 0.35, -1.6)    # blade tip
-	_blade_base.position = Vector3(-0.3, 0.35, -0.5)   # blade-guard junction
