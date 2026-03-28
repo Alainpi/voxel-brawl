@@ -82,16 +82,24 @@ func _shape_overlap_check() -> void:
 		var col := child as CollisionShape3D
 		var params := PhysicsShapeQueryParameters3D.new()
 		params.shape = col.shape
-		params.transform = col.global_transform
+		# Strip inherited scale (PlayerModel 0.4x) — keep rotation and col.scale only.
+		# col.global_position is the correct world-space position; the ancestor scale
+		# would otherwise shrink the query shape to 40% of intended size.
+		var rot_only := col.global_transform.basis.orthonormalized()
+		params.transform = Transform3D(rot_only.scaled(col.scale), col.global_position)
 		params.collision_mask = 2
 		params.collide_with_areas = true
 		params.collide_with_bodies = false
-		var hits := space.intersect_shape(params, max_hits - _hit_segments.size())
+		# Query with a generous cap — self-segments are filtered after the fact,
+		# so limiting to max_hits would let them crowd out valid enemy results.
+		var hits := space.intersect_shape(params, 32)
 		for hit_dict in hits:
 			if _hit_segments.size() >= max_hits:
 				return
 			var area := hit_dict.collider as Area3D
-			if area == null or not area.has_meta("voxel_segment"):
+			if area == null:
+				continue
+			if not area.has_meta("voxel_segment"):
 				continue
 			var seg: VoxelSegment = area.get_meta("voxel_segment")
 			if _own_segment_set.is_empty() and not _player.segments.is_empty():
@@ -99,10 +107,27 @@ func _shape_overlap_check() -> void:
 					_own_segment_set[s] = true
 			if seg in _own_segment_set:
 				continue
+			if seg.name.begins_with("VoxelSegment_") and _player.segments.values().has(seg):
+				continue
 			if seg in _hit_segments:
 				continue
 			_hit_segments.append(seg)
-			var local_hit := seg.to_local(col.global_transform.origin)
+			# Project weapon capsule center onto segment AABB (clamp to box bounds).
+			# seg.to_local() gives capsule center in segment-local space (same space as voxel
+			# positions * VOXEL_SIZE). Clamping to the box ensures the point lands inside the
+			# voxel data even when the capsule center is offset from the segment surface.
+			var seg_col := area.get_child(0) as CollisionShape3D
+			var local_hit: Vector3
+			if seg_col:
+				var capsule_local := seg.to_local(col.global_position)
+				var box := seg_col.shape as BoxShape3D
+				if box:
+					var half := box.size * 0.5
+					local_hit = capsule_local.clamp(seg_col.position - half, seg_col.position + half)
+				else:
+					local_hit = seg_col.position
+			else:
+				local_hit = Vector3.ZERO
 			_apply_hit(seg, local_hit)
 			if _hit_segments.size() == 1:
 				if audio.stream:
@@ -124,4 +149,4 @@ func _attack() -> void:
 
 # Override in subclasses to implement weapon-specific damage behaviour.
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
-	DamageManager.process_hit(seg, local_hit, voxel_radius, damage)
+	DamageManager.process_hit(seg, local_hit, voxel_radius, damage, weapon_type)
