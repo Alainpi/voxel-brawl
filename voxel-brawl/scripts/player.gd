@@ -348,7 +348,6 @@ func _build_voxel_body() -> void:
 		area.set_meta("voxel_segment", seg)
 		seg.add_child(area)
 
-		seg.detached.connect(_on_player_segment_detached.bind(seg_name))
 		segments[seg_name] = seg
 
 		if seg_name == "hand_r":
@@ -358,10 +357,34 @@ func _build_voxel_body() -> void:
 			attach.add_child(anchor)
 			_weapon_anchor = anchor
 
+	var limb_system := LimbSystem.new()
+	limb_system.name = "LimbSystem"
+	add_child(limb_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("limb_system", limb_system)
+	limb_system.initialize(segments)
+	limb_system.leg_lost.connect(_on_leg_lost)
+	limb_system.died.connect(_die)
+
 	if _weapon_anchor:
 		weapon_holder.reparent(_weapon_anchor, false)
 		weapon_holder.position = Vector3.ZERO
 		weapon_holder.rotation = Vector3.ZERO
+		weapon_holder.scale = Vector3.ONE
+		# Weapon nodes carry .tscn transforms (scale 2, rotations, offsets) that were
+		# designed for camera space. Now that we're in bone space, those transforms
+		# corrupt hitarea and sweep marker positions. Bake each weapon node's transform
+		# into its visual children only (mesh, audio, particles), then zero the weapon
+		# node. Hitareas (Area3D) and sweep markers (Marker3D) are left untouched so
+		# they operate in clean hand-bone-relative space.
+		for weapon_node in weapon_holder.get_children():
+			var old_xform: Transform3D = weapon_node.transform
+			if old_xform.is_equal_approx(Transform3D.IDENTITY):
+				continue
+			weapon_node.transform = Transform3D.IDENTITY
+			for child in weapon_node.get_children():
+				if child is MeshInstance3D or child is AudioStreamPlayer3D or child is GPUParticles3D:
+					child.transform = old_xform * child.transform
 
 
 func take_damage(amount: float) -> void:
@@ -371,15 +394,11 @@ func take_damage(amount: float) -> void:
 	if seg != null:
 		seg.take_hit(Vector3.ZERO, 2.0, amount)
 
-func _on_player_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
-	if seg_name in ["torso_top", "head_bottom", "head_top"] and not _is_dead:
-		_die()
-	elif seg_name in ["leg_r_upper", "leg_l_upper"]:
-		_legs_lost += 2  # full leg gone
-		print("Player lost a full leg! Speed heavily reduced.")
+func _on_leg_lost(seg_name: String) -> void:
+	if seg_name in ["leg_r_upper", "leg_l_upper"]:
+		_legs_lost += 2
 	elif seg_name in ["leg_r_fore", "leg_l_fore"]:
-		_legs_lost += 1  # lower leg only
-		print("Player lost a lower leg! Speed reduced.")
+		_legs_lost += 1
 
 func _die() -> void:
 	_is_dead = true

@@ -40,6 +40,9 @@ func _process(_delta: float) -> void:
 
 func _build_dummy() -> void:
 	_is_dead = false
+	var old_ls := get_node_or_null("LimbSystem")
+	if old_ls != null:
+		old_ls.queue_free()
 	segments.clear()
 
 	for attach in _attachments:
@@ -97,15 +100,19 @@ func _build_dummy() -> void:
 		area.set_meta("voxel_segment", seg)
 		seg.add_child(area)
 
-		seg.detached.connect(_on_segment_detached.bind(seg_name))
 		segments[seg_name] = seg
+
+	var limb_system := LimbSystem.new()
+	limb_system.name = "LimbSystem"
+	add_child(limb_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("limb_system", limb_system)
+	limb_system.initialize(segments)
+	limb_system.died.connect(_die)
 
 	if anim_player:
 		anim_player.play("idle")
 
-func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
-	if seg_name in ["torso_bottom", "torso_top", "head_bottom", "head_top"] and not _is_dead:
-		_die()
 
 func _die() -> void:
 	_is_dead = true
