@@ -29,3 +29,8 @@ func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
 	# the bat degrades the limb over multiple hits rather than slicing through.
 	# TODO: reduce detach impulse force so limbs crumple rather than fly off cleanly.
 	DamageManager.process_hit(seg, local_hit, voxel_radius, damage)
+
+func _create_sweep_markers() -> void:
+	super()
+	_blade_tip.position = Vector3(-0.35, 0.35, -1.2)   # far end of barrel
+	_blade_base.position = Vector3(-0.35, 0.35, -0.4)  # handle-barrel junction

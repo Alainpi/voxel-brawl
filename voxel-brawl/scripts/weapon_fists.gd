@@ -27,3 +27,8 @@ func _create_hitarea() -> void:
 	left.position = Vector3(-0.5, 0, -0.3)   # tune X until left knuckle aligns
 	left.disabled = true
 	_hit_area.add_child(left)
+
+func _create_sweep_markers() -> void:
+	super()
+	_blade_tip.position = Vector3(0.0, 0.0, -0.4)      # right knuckles
+	_blade_base.position = Vector3(0.0, 0.0, -0.1)     # right wrist
