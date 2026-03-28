@@ -23,6 +23,12 @@ var _hit_area: Area3D = null
 var _hit_segments: Array[VoxelSegment] = []
 var _own_segment_set: Dictionary = {}  # VoxelSegment -> true, lazy-populated on first use
 
+var _hitbox_active := false
+var _blade_tip: Marker3D = null
+var _blade_base: Marker3D = null
+var _prev_tip_pos := Vector3.INF
+var _prev_base_pos := Vector3.INF
+
 @onready var audio: AudioStreamPlayer3D = $AudioStreamPlayer3D
 
 # _create_hitarea() must come after super() — hit_shape and hit_shape_offset are
@@ -30,6 +36,7 @@ var _own_segment_set: Dictionary = {}  # VoxelSegment -> true, lazy-populated on
 func _ready() -> void:
 	super()
 	_create_hitarea()
+	_create_sweep_markers()
 
 # Virtual — override in subclasses to build composite hitbox shapes (e.g. axe with
 # multiple blades). Call super() first to get _hit_area created and area_entered
@@ -54,15 +61,32 @@ func _create_hitarea() -> void:
 	add_child(_hit_area)
 	_hit_area.area_entered.connect(_on_hit_area_entered)
 
+# Virtual — override in subclasses to place BladeTip and BladeBase at weapon-specific
+# local positions. Call super() first so _blade_tip and _blade_base are created before
+# you set their positions.
+func _create_sweep_markers() -> void:
+	_blade_tip = Marker3D.new()
+	_blade_tip.name = "BladeTip"
+	add_child(_blade_tip)
+	_blade_base = Marker3D.new()
+	_blade_base.name = "BladeBase"
+	add_child(_blade_base)
+
 func _enable_hitbox() -> void:
 	for child in _hit_area.get_children():
 		if child is CollisionShape3D:
 			child.disabled = false
+	_hitbox_active = true
+	_prev_tip_pos = Vector3.INF
+	_prev_base_pos = Vector3.INF
 
 func _disable_hitbox() -> void:
 	for child in _hit_area.get_children():
 		if child is CollisionShape3D:
 			child.disabled = true
+	_hitbox_active = false
+	_prev_tip_pos = Vector3.INF
+	_prev_base_pos = Vector3.INF
 
 func _physics_process(delta: float) -> void:
 	_cooldown_timer = maxf(_cooldown_timer - delta, 0.0)
