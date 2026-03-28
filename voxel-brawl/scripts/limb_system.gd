@@ -111,8 +111,58 @@ func _die() -> void:
 
 # --- Ragdoll primitives (implemented in Tasks 5–7) ---
 
-func _spawn_broken_ragdoll(_root_seg_name: String) -> void:
-	pass  # implemented in Task 5
+func _spawn_broken_ragdoll(root_seg_name: String) -> void:
+	var chain := _chain_downward(root_seg_name)
+	var rbs: Dictionary = {}  # seg_name → RigidBody3D
+
+	# Cache the root segment's BoneAttachment3D parent BEFORE any reparenting
+	var root_seg: VoxelSegment = segments.get(root_seg_name)
+	var root_bone_attach: Node3D = null
+	if root_seg != null and root_seg.get_parent() is BoneAttachment3D:
+		root_bone_attach = root_seg.get_parent()
+
+	for seg_name in chain:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg == null or seg.is_detached or seg.is_broken:
+			continue
+
+		var rb := RigidBody3D.new()
+		rb.mass = _get_mass(seg_name)
+		rb.add_to_group("detached_limb")
+		get_tree().root.add_child(rb)
+		rb.global_transform = seg.global_transform
+
+		rb.add_child(_make_box_col(seg))
+		seg.reparent(rb, true)
+		seg.is_broken = true
+		rbs[seg_name] = rb
+
+	if rbs.is_empty():
+		return
+
+	# Connect adjacent segments in chain with PinJoint3D
+	for seg_name in chain:
+		if not rbs.has(seg_name):
+			continue
+		var parent_name: String = HIERARCHY[seg_name]["parent"]
+		if parent_name.is_empty() or not rbs.has(parent_name):
+			continue
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg == null:
+			continue
+		_make_pin_joint(_joint_world_pos(seg), rbs[parent_name], rbs[seg_name])
+
+	# Shoulder anchor: StaticBody3D pinned to root RB, position tracked to bone each tick
+	if root_bone_attach != null and rbs.has(root_seg_name):
+		var anchor := StaticBody3D.new()
+		get_tree().root.add_child(anchor)
+		anchor.global_position = root_bone_attach.global_position
+		_make_pin_joint(root_bone_attach.global_position, anchor, rbs[root_seg_name])
+		_broken_anchors.append({
+			"anchor": anchor,
+			"bone_attach": root_bone_attach,
+			"root_seg": root_seg_name
+		})
 
 func _spawn_detached_ragdoll(_root_seg_name: String) -> void:
 	pass  # implemented in Task 6
