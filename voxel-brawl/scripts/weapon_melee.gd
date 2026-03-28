@@ -40,17 +40,16 @@ func _ready() -> void:
 	_create_sweep_markers()
 
 # Virtual — override in subclasses to build composite hitbox shapes (e.g. axe with
-# multiple blades). Call super() first to get _hit_area created and area_entered
-# connected, then add additional CollisionShape3D children to _hit_area.
-# If overriding without calling super(), you must create _hit_area and connect
-# area_entered yourself.
+# multiple blades). Call super() first to get _hit_area created, then add additional
+# CollisionShape3D children to _hit_area.
 # IMPORTANT: set hit_shape in _configure() for super() to build the primary shape.
 # If hit_shape is null, super() skips the primary CollisionShape3D.
 func _create_hitarea() -> void:
 	_hit_area = Area3D.new()
 	_hit_area.collision_layer = 0
-	_hit_area.collision_mask = 2   # matches VoxelSegment area layer
-	_hit_area.monitorable = false  # other areas cannot detect this hitbox; only this hitbox detects them
+	_hit_area.collision_mask = 2
+	_hit_area.monitoring = false      # sweep handles detection; Area3D is gate only
+	_hit_area.monitorable = false
 	if hit_shape:
 		var col := CollisionShape3D.new()
 		col.shape = hit_shape
@@ -60,7 +59,7 @@ func _create_hitarea() -> void:
 		col.disabled = true
 		_hit_area.add_child(col)
 	add_child(_hit_area)
-	_hit_area.area_entered.connect(_on_hit_area_entered)
+	# area_entered not connected — sweep is the sole hit mechanism
 
 # Virtual — override in subclasses to place BladeTip and BladeBase at weapon-specific
 # local positions. Call super() first so _blade_tip and _blade_base are created before
@@ -146,32 +145,6 @@ func _attack() -> void:
 	await get_tree().create_timer(hit_window_duration).timeout
 	if is_instance_valid(self):
 		_disable_hitbox()
-
-func _on_hit_area_entered(area: Area3D) -> void:
-	# Filter order: reject non-segments first so environmental areas don't consume hit slots.
-	if not area.has_meta("voxel_segment"):
-		return
-	var seg: VoxelSegment = area.get_meta("voxel_segment")
-	# Lazy-populate own segment set (player builds segments deferred, so segments dict
-	# may be empty when weapon _ready() fires — populate on first area_entered instead).
-	if _own_segment_set.is_empty() and not _player.segments.is_empty():
-		for s: VoxelSegment in _player.segments.values():
-			_own_segment_set[s] = true
-	if seg in _own_segment_set:   # O(1) hash lookup — no allocation
-		return
-	if seg in _hit_segments:
-		return
-	if _hit_segments.size() >= max_hits:
-		return
-	_hit_segments.append(seg)
-	# local_hit uses Area3D origin as approximation — Step 4 replaces with blade-tip sweep.
-	var local_hit := seg.to_local(_hit_area.global_position)
-	_apply_hit(seg, local_hit)
-	if _hit_segments.size() == 1:   # feedback fires once per swing on first hit
-		if audio.stream:
-			audio.play()
-		_player.trigger_hit_shake()
-		_player.trigger_crosshair_recoil()
 
 # Override in subclasses to implement weapon-specific damage behaviour.
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
