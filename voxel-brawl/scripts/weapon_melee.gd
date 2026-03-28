@@ -97,6 +97,44 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("attack") and _cooldown_timer <= 0.0:
 		_attack()
 
+	if _hitbox_active and _blade_tip != null:
+		var tip_now := _blade_tip.global_position
+		var base_now := _blade_base.global_position
+		if _prev_tip_pos != Vector3.INF:
+			_sweep_check(_prev_tip_pos, tip_now)
+			_sweep_check(_prev_base_pos, base_now)
+		_prev_tip_pos = tip_now
+		_prev_base_pos = base_now
+
+func _sweep_check(from: Vector3, to: Vector3) -> void:
+	if _hit_segments.size() >= max_hits:
+		return
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	var result := space.intersect_ray(query)
+	if not result or not result.collider is Area3D:
+		return
+	if not result.collider.has_meta("voxel_segment"):
+		return
+	var seg: VoxelSegment = result.collider.get_meta("voxel_segment")
+	if _own_segment_set.is_empty() and not _player.segments.is_empty():
+		for s: VoxelSegment in _player.segments.values():
+			_own_segment_set[s] = true
+	if seg in _own_segment_set:
+		return
+	if seg in _hit_segments:
+		return
+	_hit_segments.append(seg)
+	var local_hit := seg.to_local(result.position)
+	_apply_hit(seg, local_hit)
+	if _hit_segments.size() == 1:
+		if audio.stream:
+			audio.play()
+		_player.trigger_hit_shake()
+		_player.trigger_crosshair_recoil()
+
 func _attack() -> void:
 	_cooldown_timer = cooldown
 	_hit_segments.clear()
