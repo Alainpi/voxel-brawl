@@ -1,7 +1,7 @@
 # scripts/weapon_melee.gd
-# Melee weapon base — per-frame blade-tip sweep raycast hit detection with timer-driven activation window.
+# Melee weapon base — per-frame shape overlap hit detection with timer-driven activation window.
 # Subclasses override _configure() for stats, _apply_hit() for damage behaviour,
-# _create_sweep_markers() for BladeTip/BladeBase positions.
+# _create_hitarea() for composite collision shape setup.
 class_name WeaponMelee
 extends WeaponBase
 
@@ -16,7 +16,7 @@ var hit_window_duration := 0.15  # how long the hitbox stays active
 var max_hits := 1                # max segments hit per swing; subclasses override
 var hit_shape: Shape3D = null            # set by subclass in _configure()
 var hit_shape_offset: Vector3 = Vector3.ZERO
-var hit_shape_rotation: Vector3 = Vector3.ZERO  # degrees — e.g. Vector3(90,0,0) to align with mesh
+var hit_shape_rotation: Vector3 = Vector3.ZERO  # degrees — e.g. Vector3(90,0,0) to align capsule
 var hit_shape_scale: Vector3 = Vector3.ONE
 
 var _cooldown_timer := 0.0
@@ -25,10 +25,6 @@ var _hit_segments: Array[VoxelSegment] = []
 var _own_segment_set: Dictionary = {}  # VoxelSegment -> true, lazy-populated on first use
 
 var _hitbox_active := false
-var _blade_tip: Marker3D = null
-var _blade_base: Marker3D = null
-var _prev_tip_pos := Vector3.INF
-var _prev_base_pos := Vector3.INF
 
 @onready var audio: AudioStreamPlayer3D = $AudioStreamPlayer3D
 
@@ -37,18 +33,17 @@ var _prev_base_pos := Vector3.INF
 func _ready() -> void:
 	super()
 	_create_hitarea()
-	_create_sweep_markers()
 
-# Virtual — override in subclasses to build composite hitbox shapes (e.g. axe with
-# multiple blades). Call super() first to get _hit_area created, then add additional
-# CollisionShape3D children to _hit_area.
+# Virtual — override in subclasses to build composite hitbox shapes (e.g. WeaponFists
+# adds a second CollisionShape3D for the left fist). Call super() first to get
+# _hit_area created and the primary shape added.
 # IMPORTANT: set hit_shape in _configure() for super() to build the primary shape.
 # If hit_shape is null, super() skips the primary CollisionShape3D.
 func _create_hitarea() -> void:
 	_hit_area = Area3D.new()
 	_hit_area.collision_layer = 0
 	_hit_area.collision_mask = 2
-	_hit_area.monitoring = false      # sweep handles detection; Area3D is gate only
+	_hit_area.monitoring = false
 	_hit_area.monitorable = false
 	if hit_shape:
 		var col := CollisionShape3D.new()
@@ -56,83 +51,64 @@ func _create_hitarea() -> void:
 		col.position = hit_shape_offset
 		col.rotation_degrees = hit_shape_rotation
 		col.scale = hit_shape_scale
-		col.disabled = true
 		_hit_area.add_child(col)
 	add_child(_hit_area)
-	# area_entered not connected — sweep is the sole hit mechanism
-
-# Virtual — override in subclasses to place BladeTip and BladeBase at weapon-specific
-# local positions. Call super() first so _blade_tip and _blade_base are created before
-# you set their positions.
-# If NOT overridden, both markers sit at Vector3.ZERO (weapon root) and per-frame
-# sweeps will cast near-zero-length rays — hits will not register correctly. Every
-# concrete weapon subclass must override this.
-func _create_sweep_markers() -> void:
-	_blade_tip = Marker3D.new()
-	_blade_tip.name = "BladeTip"
-	add_child(_blade_tip)
-	_blade_base = Marker3D.new()
-	_blade_base.name = "BladeBase"
-	add_child(_blade_base)
+	# area_entered not connected — shape overlap query is the sole hit mechanism
 
 func _enable_hitbox() -> void:
-	for child in _hit_area.get_children():
-		if child is CollisionShape3D:
-			child.disabled = false
 	_hitbox_active = true
-	_prev_tip_pos = Vector3.INF
-	_prev_base_pos = Vector3.INF
 
 func _disable_hitbox() -> void:
-	for child in _hit_area.get_children():
-		if child is CollisionShape3D:
-			child.disabled = true
 	_hitbox_active = false
-	_prev_tip_pos = Vector3.INF
-	_prev_base_pos = Vector3.INF
+	_hit_segments.clear()
 
 func _physics_process(delta: float) -> void:
 	_cooldown_timer = maxf(_cooldown_timer - delta, 0.0)
 	if Input.is_action_just_pressed("attack") and _cooldown_timer <= 0.0:
 		_attack()
+	if _hitbox_active:
+		_shape_overlap_check()
 
-	if _hitbox_active and _blade_tip != null:
-		var tip_now := _blade_tip.global_position
-		var base_now := _blade_base.global_position
-		if _prev_tip_pos != Vector3.INF:
-			_sweep_check(_prev_tip_pos, tip_now)
-			_sweep_check(_prev_base_pos, base_now)
-		_prev_tip_pos = tip_now
-		_prev_base_pos = base_now
-
-func _sweep_check(from: Vector3, to: Vector3) -> void:
+# Each physics tick during the active window: query every CollisionShape3D in
+# _hit_area against layer-2 areas. Fires _apply_hit() for the first max_hits
+# unique, non-own segments found.
+func _shape_overlap_check() -> void:
 	if _hit_segments.size() >= max_hits:
 		return
 	var space := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
-	query.collide_with_areas = true
-	query.collide_with_bodies = false
-	var result := space.intersect_ray(query)
-	if not result or not result.collider is Area3D:
-		return
-	if not result.collider.has_meta("voxel_segment"):
-		return
-	var seg: VoxelSegment = result.collider.get_meta("voxel_segment")
-	if _own_segment_set.is_empty() and not _player.segments.is_empty():
-		for s: VoxelSegment in _player.segments.values():
-			_own_segment_set[s] = true
-	if seg in _own_segment_set:
-		return
-	if seg in _hit_segments:
-		return
-	_hit_segments.append(seg)
-	var local_hit := seg.to_local(result.position)
-	_apply_hit(seg, local_hit)
-	if _hit_segments.size() == 1:
-		if audio.stream:
-			audio.play()
-		_player.trigger_hit_shake()
-		_player.trigger_crosshair_recoil()
+	for child in _hit_area.get_children():
+		if not child is CollisionShape3D:
+			continue
+		var col := child as CollisionShape3D
+		var params := PhysicsShapeQueryParameters3D.new()
+		params.shape = col.shape
+		params.transform = col.global_transform
+		params.collision_mask = 2
+		params.collide_with_areas = true
+		params.collide_with_bodies = false
+		var hits := space.intersect_shape(params, max_hits - _hit_segments.size())
+		for hit_dict in hits:
+			if _hit_segments.size() >= max_hits:
+				return
+			var area := hit_dict.collider as Area3D
+			if area == null or not area.has_meta("voxel_segment"):
+				continue
+			var seg: VoxelSegment = area.get_meta("voxel_segment")
+			if _own_segment_set.is_empty() and not _player.segments.is_empty():
+				for s: VoxelSegment in _player.segments.values():
+					_own_segment_set[s] = true
+			if seg in _own_segment_set:
+				continue
+			if seg in _hit_segments:
+				continue
+			_hit_segments.append(seg)
+			var local_hit := seg.to_local(col.global_transform.origin)
+			_apply_hit(seg, local_hit)
+			if _hit_segments.size() == 1:
+				if audio.stream:
+					audio.play()
+				_player.trigger_hit_shake()
+				_player.trigger_crosshair_recoil()
 
 func _attack() -> void:
 	_cooldown_timer = cooldown
