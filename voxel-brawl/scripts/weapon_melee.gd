@@ -1,6 +1,7 @@
 # scripts/weapon_melee.gd
-# Melee weapon base — Area3D overlap hit detection with timer-driven activation window.
-# Subclasses override _configure() for stats and _apply_hit() for damage behaviour.
+# Melee weapon base — per-frame blade-tip sweep raycast hit detection with timer-driven activation window.
+# Subclasses override _configure() for stats, _apply_hit() for damage behaviour,
+# _create_sweep_markers() for BladeTip/BladeBase positions.
 class_name WeaponMelee
 extends WeaponBase
 
@@ -64,6 +65,9 @@ func _create_hitarea() -> void:
 # Virtual — override in subclasses to place BladeTip and BladeBase at weapon-specific
 # local positions. Call super() first so _blade_tip and _blade_base are created before
 # you set their positions.
+# If NOT overridden, both markers sit at Vector3.ZERO (weapon root) and per-frame
+# sweeps will cast near-zero-length rays — hits will not register correctly. Every
+# concrete weapon subclass must override this.
 func _create_sweep_markers() -> void:
 	_blade_tip = Marker3D.new()
 	_blade_tip.name = "BladeTip"
