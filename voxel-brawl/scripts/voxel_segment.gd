@@ -26,6 +26,7 @@ var current_voxel_count: int = 0
 var root_axis: Vector3i = Vector3i.ZERO
 
 var is_detached: bool = false
+var is_broken: bool = false
 var bone_attachment: String = ""
 var _root_voxels_cached: Array[Vector3i] = []
 
@@ -123,8 +124,6 @@ func _get_attachment_ref_pos() -> Vector3:
 
 func rebuild_mesh() -> void:
 	_pending_rebuild = false
-	if is_detached:
-		return
 	if voxel_data.is_empty():
 		mesh_instance.mesh = null
 		return
@@ -415,6 +414,10 @@ func detach() -> void:
 			child.collision_layer = 0
 
 	emit_signal("detached", self)
+
+	# LimbSystem handles ragdoll when present — skip standalone spawn
+	if get_meta("limb_system", null) != null:
+		return
 
 	if voxel_data.is_empty():
 		return  # nothing left to launch
