@@ -36,6 +36,7 @@ var _is_dead: bool = false
 
 # Each entry: { "anchor": StaticBody3D, "bone_attach": Node3D, "root_seg": String }
 var _broken_anchors: Array[Dictionary] = []
+var _live_joints: Array[PinJoint3D] = []
 
 signal leg_lost(seg_name: String)
 signal died
@@ -108,6 +109,7 @@ func _die() -> void:
 	_is_dead = true
 	_spawn_death_ragdoll()
 	emit_signal("died")
+	set_physics_process(false)
 
 # --- Ragdoll primitives (implemented in Tasks 5–7) ---
 
@@ -266,6 +268,12 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 		)
 
 func _spawn_death_ragdoll() -> void:
+	# Free all existing joints to avoid duplicate constraints on already-broken segments
+	for joint in _live_joints:
+		if is_instance_valid(joint):
+			joint.queue_free()
+	_live_joints.clear()
+
 	var rbs: Dictionary = {}  # seg_name → RigidBody3D
 
 	# Build or reuse RigidBody3D for every segment
@@ -375,6 +383,7 @@ func _make_pin_joint(world_pos: Vector3, body_a: PhysicsBody3D, body_b: PhysicsB
 	joint.global_position = world_pos
 	joint.node_a = joint.get_path_to(body_a)
 	joint.node_b = joint.get_path_to(body_b)
+	_live_joints.append(joint)
 	return joint
 
 func _get_mass(seg_name: String) -> float:
