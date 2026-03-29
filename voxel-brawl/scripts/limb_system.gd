@@ -175,6 +175,12 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 
 	# Transition: was BROKEN, now DETACHED — remove shoulder anchor, apply impulse
 	if root_seg != null and root_seg.is_broken:
+		# Mark entire chain as detached so integrity checks short-circuit
+		for seg_name in _chain_downward(root_seg_name):
+			var seg: VoxelSegment = segments.get(seg_name)
+			if seg != null and seg.is_broken:
+				seg.is_detached = true
+		# Remove shoulder anchor for this chain
 		for i in range(_broken_anchors.size() - 1, -1, -1):
 			if _broken_anchors[i]["root_seg"] == root_seg_name:
 				if is_instance_valid(_broken_anchors[i]["anchor"]):
@@ -189,14 +195,20 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 
 	# Fresh detach — build RigidBody3D chain for root and all descendants
 	var chain := _chain_downward(root_seg_name)
-	var rbs: Dictionary = {}          # seg_name → RigidBody3D
-	var joint_positions: Dictionary = {}  # seg_name → Vector3 (pre-cached before reparent)
+	var rbs: Dictionary = {}           # seg_name → RigidBody3D (new or existing)
+	var joint_positions: Dictionary = {}   # seg_name → Vector3
 
-	# Pre-cache joint world positions before reparenting changes the parent chain
+	# Pre-cache joint world positions; collect existing RBs for already-broken segs
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
-		if seg != null and (not seg.is_detached or seg_name == root_seg_name):
-			joint_positions[seg_name] = _joint_world_pos(seg)
+		if seg == null:
+			continue
+		if seg.is_detached and seg_name != root_seg_name:
+			continue
+		joint_positions[seg_name] = _joint_world_pos(seg)
+		# Broken segs already own an RB — reuse it, don't create a duplicate
+		if seg.is_broken and seg.get_parent() is RigidBody3D:
+			rbs[seg_name] = seg.get_parent() as RigidBody3D
 
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
@@ -204,12 +216,21 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 			continue
 		if seg.is_detached and seg_name != root_seg_name:
 			continue
-		# Mark descendants as detached so their connectivity checks don't re-fire
+		# Mark descendants as detached so connectivity checks don't re-fire
 		if seg_name != root_seg_name:
 			seg.is_detached = true
 			for child in seg.get_children():
 				if child is Area3D:
 					(child as Area3D).collision_layer = 0
+		# Already-broken segments own existing RBs — free their anchor and skip new RB
+		if seg.is_broken:
+			for i in range(_broken_anchors.size() - 1, -1, -1):
+				if _broken_anchors[i]["root_seg"] == seg_name:
+					if is_instance_valid(_broken_anchors[i]["anchor"]):
+						_broken_anchors[i]["anchor"].queue_free()
+					_broken_anchors.remove_at(i)
+					break
+			continue  # rbs[seg_name] already set in pre-cache loop above
 
 		var rb := RigidBody3D.new()
 		rb.mass = _get_mass(seg_name)
