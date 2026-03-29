@@ -113,13 +113,20 @@ func _die() -> void:
 
 func _spawn_broken_ragdoll(root_seg_name: String) -> void:
 	var chain := _chain_downward(root_seg_name)
-	var rbs: Dictionary = {}  # seg_name → RigidBody3D
+	var rbs: Dictionary = {}          # seg_name → RigidBody3D
+	var joint_positions: Dictionary = {}  # seg_name → Vector3 (pre-cached before reparent)
 
 	# Cache the root segment's BoneAttachment3D parent BEFORE any reparenting
 	var root_seg: VoxelSegment = segments.get(root_seg_name)
 	var root_bone_attach: Node3D = null
 	if root_seg != null and root_seg.get_parent() is BoneAttachment3D:
 		root_bone_attach = root_seg.get_parent()
+
+	# Pre-cache joint world positions before reparenting changes the parent chain
+	for seg_name in chain:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg != null and not seg.is_detached and not seg.is_broken:
+			joint_positions[seg_name] = _joint_world_pos(seg)
 
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
@@ -140,17 +147,16 @@ func _spawn_broken_ragdoll(root_seg_name: String) -> void:
 	if rbs.is_empty():
 		return
 
-	# Connect adjacent segments in chain with PinJoint3D
+	# Connect adjacent segments in chain with PinJoint3D using pre-cached positions
 	for seg_name in chain:
 		if not rbs.has(seg_name):
 			continue
 		var parent_name: String = HIERARCHY[seg_name]["parent"]
 		if parent_name.is_empty() or not rbs.has(parent_name):
 			continue
-		var seg: VoxelSegment = segments.get(seg_name)
-		if seg == null:
+		if not joint_positions.has(seg_name):
 			continue
-		_make_pin_joint(_joint_world_pos(seg), rbs[parent_name], rbs[seg_name])
+		_make_pin_joint(joint_positions[seg_name], rbs[parent_name], rbs[seg_name])
 
 	# Shoulder anchor: StaticBody3D pinned to root RB, position tracked to bone each tick
 	if root_bone_attach != null and rbs.has(root_seg_name):
