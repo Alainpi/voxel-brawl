@@ -170,8 +170,79 @@ func _spawn_broken_ragdoll(root_seg_name: String) -> void:
 			"root_seg": root_seg_name
 		})
 
-func _spawn_detached_ragdoll(_root_seg_name: String) -> void:
-	pass  # implemented in Task 6
+func _spawn_detached_ragdoll(root_seg_name: String) -> void:
+	var root_seg: VoxelSegment = segments.get(root_seg_name)
+
+	# Transition: was BROKEN, now DETACHED — remove shoulder anchor, apply impulse
+	if root_seg != null and root_seg.is_broken:
+		for i in range(_broken_anchors.size() - 1, -1, -1):
+			if _broken_anchors[i]["root_seg"] == root_seg_name:
+				if is_instance_valid(_broken_anchors[i]["anchor"]):
+					_broken_anchors[i]["anchor"].queue_free()
+				_broken_anchors.remove_at(i)
+				break
+		if root_seg.get_parent() is RigidBody3D:
+			var rb := root_seg.get_parent() as RigidBody3D
+			rb.apply_central_impulse(Vector3(randf_range(-3, 3), randf_range(2, 5), randf_range(-3, 3)))
+			rb.apply_torque_impulse(Vector3(randf_range(-2, 2), randf_range(-2, 2), randf_range(-2, 2)))
+		return
+
+	# Fresh detach — build RigidBody3D chain for root and all descendants
+	var chain := _chain_downward(root_seg_name)
+	var rbs: Dictionary = {}          # seg_name → RigidBody3D
+	var joint_positions: Dictionary = {}  # seg_name → Vector3 (pre-cached before reparent)
+
+	# Pre-cache joint world positions before reparenting changes the parent chain
+	for seg_name in chain:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg != null and (not seg.is_detached or seg_name == root_seg_name):
+			joint_positions[seg_name] = _joint_world_pos(seg)
+
+	for seg_name in chain:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg == null:
+			continue
+		if seg.is_detached and seg_name != root_seg_name:
+			continue
+		# Mark descendants as detached so their connectivity checks don't re-fire
+		if seg_name != root_seg_name:
+			seg.is_detached = true
+			for child in seg.get_children():
+				if child is Area3D:
+					(child as Area3D).collision_layer = 0
+
+		var rb := RigidBody3D.new()
+		rb.mass = _get_mass(seg_name)
+		rb.add_to_group("detached_limb")
+		get_tree().root.add_child(rb)
+		rb.global_transform = seg.global_transform
+
+		rb.add_child(_make_box_col(seg))
+		seg.reparent(rb, true)
+		rbs[seg_name] = rb
+
+	if rbs.is_empty():
+		return
+
+	# Connect adjacent segments in chain with PinJoint3D using pre-cached positions
+	for seg_name in chain:
+		if not rbs.has(seg_name):
+			continue
+		var parent_name: String = HIERARCHY[seg_name]["parent"]
+		if parent_name.is_empty() or not rbs.has(parent_name):
+			continue
+		if not joint_positions.has(seg_name):
+			continue
+		_make_pin_joint(joint_positions[seg_name], rbs[parent_name], rbs[seg_name])
+
+	# Apply outward impulse to the root — chain tumbles together
+	if rbs.has(root_seg_name):
+		rbs[root_seg_name].apply_central_impulse(
+			Vector3(randf_range(-3, 3), randf_range(2, 5), randf_range(-3, 3))
+		)
+		rbs[root_seg_name].apply_torque_impulse(
+			Vector3(randf_range(-2, 2), randf_range(-2, 2), randf_range(-2, 2))
+		)
 
 func _spawn_death_ragdoll() -> void:
 	pass  # implemented in Task 7
