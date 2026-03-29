@@ -14,8 +14,8 @@ func _configure() -> void:
 	hit_shape = s
 	hit_shape_offset = Vector3(0, 0, -0.3)   # right fist — forward from weapon root
 	hit_enable_delay = 0.08
-	hit_window_duration = 0.12
-	max_hits = 1
+	hit_window_duration = 1
+	max_hits = 5
 
 func _create_hitarea() -> void:
 	super()   # builds _hit_area, adds right-fist sphere from hit_shape
