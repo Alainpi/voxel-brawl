@@ -354,7 +354,7 @@ func _chain_downward(root_name: String) -> Array[String]:
 	var chain: Array[String] = []
 	var queue: Array[String] = [root_name]
 	while not queue.is_empty():
-		var cur := queue.pop_front()
+		var cur: String = queue.pop_front()
 		chain.append(cur)
 		for child in HIERARCHY[cur]["children"]:
 			queue.append(child)
