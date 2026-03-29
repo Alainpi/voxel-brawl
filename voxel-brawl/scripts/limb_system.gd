@@ -266,7 +266,54 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 		)
 
 func _spawn_death_ragdoll() -> void:
-	pass  # implemented in Task 7
+	var rbs: Dictionary = {}  # seg_name → RigidBody3D
+
+	# Build or reuse RigidBody3D for every segment
+	for seg_name in HIERARCHY:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg == null:
+			continue
+		# Reuse existing RB if segment was already broken/detached
+		if seg.get_parent() is RigidBody3D:
+			rbs[seg_name] = seg.get_parent() as RigidBody3D
+			continue
+		if seg.is_detached:
+			continue  # already flew off as its own RB — leave it
+
+		var rb := RigidBody3D.new()
+		rb.mass = _get_mass(seg_name)
+		rb.add_to_group("detached_limb")
+		get_tree().root.add_child(rb)
+		rb.global_transform = seg.global_transform
+
+		rb.add_child(_make_box_col(seg))
+		seg.reparent(rb, true)
+		seg.is_broken = true
+		rbs[seg_name] = rb
+
+	# Remove all shoulder anchors — body is now fully free
+	for entry in _broken_anchors:
+		if is_instance_valid(entry["anchor"]):
+			(entry["anchor"] as Node3D).queue_free()
+	_broken_anchors.clear()
+
+	# Pre-cache joint world positions before creating any joints
+	var joint_positions: Dictionary = {}
+	for seg_name in HIERARCHY:
+		var seg: VoxelSegment = segments.get(seg_name)
+		if seg != null and rbs.has(seg_name):
+			joint_positions[seg_name] = _joint_world_pos(seg)
+
+	# Connect full hierarchy with PinJoint3D (gravity drives the collapse — no impulse)
+	for seg_name in HIERARCHY:
+		if not rbs.has(seg_name):
+			continue
+		var parent_name: String = HIERARCHY[seg_name]["parent"]
+		if parent_name.is_empty() or not rbs.has(parent_name):
+			continue
+		if not joint_positions.has(seg_name):
+			continue
+		_make_pin_joint(joint_positions[seg_name], rbs[parent_name], rbs[seg_name])
 
 # --- Physics process: update shoulder anchors for broken limbs ---
 

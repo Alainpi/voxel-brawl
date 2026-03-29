@@ -147,6 +147,9 @@ func _physics_process(delta: float) -> void:
 		global_position, CAM_FOLLOW_SPEED * delta
 	)
 
+	if _is_dead:
+		return
+
 	# Gravity
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
