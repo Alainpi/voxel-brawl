@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://brawler0001sc"]
 
 [ext_resource type="Script" path="res://scripts/brawler.gd" id="1_brawl"]
+[ext_resource type="PackedScene" uid="uid://bcb2r0fxa2poa" path="res://assets/models/player_rig.glb" id="2_rig"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_brawl"]
 radius = 0.4
@@ -14,3 +15,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("CapsuleShape3D_brawl")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+
+[node name="PlayerModel" parent="." instance=ExtResource("2_rig")]
+transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
