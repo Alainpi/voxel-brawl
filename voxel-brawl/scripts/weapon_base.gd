@@ -4,14 +4,15 @@
 class_name WeaponBase
 extends Node3D
 
-var _player: Player
+var _player: Node3D
 
 enum WeaponType { BLUNT, SHARP, RANGED }
 var weapon_type: WeaponType = WeaponType.BLUNT
 
 func _ready() -> void:
 	_configure()
-	_player = get_node("../../../../")
+	if _player == null:
+		_player = get_node("../../../../")
 
 # Override in each concrete weapon class to set stats.
 func _configure() -> void:

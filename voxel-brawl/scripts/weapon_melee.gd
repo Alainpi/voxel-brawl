@@ -19,6 +19,8 @@ var hit_shape_offset: Vector3 = Vector3.ZERO
 var hit_shape_rotation: Vector3 = Vector3.ZERO  # degrees — e.g. Vector3(90,0,0) to align capsule
 var hit_shape_scale: Vector3 = Vector3.ONE
 
+var is_player_controlled: bool = true
+
 var _cooldown_timer := 0.0
 var _hit_area: Area3D = null
 var _hit_segments: Array[VoxelSegment] = []
@@ -64,7 +66,7 @@ func _disable_hitbox() -> void:
 
 func _physics_process(delta: float) -> void:
 	_cooldown_timer = maxf(_cooldown_timer - delta, 0.0)
-	if Input.is_action_just_pressed("attack") and _cooldown_timer <= 0.0:
+	if is_player_controlled and Input.is_action_just_pressed("attack") and _cooldown_timer <= 0.0:
 		_attack()
 	if _hitbox_active:
 		_shape_overlap_check()
@@ -146,6 +148,10 @@ func _attack() -> void:
 	await get_tree().create_timer(hit_window_duration).timeout
 	if is_instance_valid(self):
 		_disable_hitbox()
+
+func request_attack() -> void:
+	if _cooldown_timer <= 0.0:
+		_attack()
 
 # Override in subclasses to implement weapon-specific damage behaviour.
 func _apply_hit(seg: VoxelSegment, local_hit: Vector3) -> void:
