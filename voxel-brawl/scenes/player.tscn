@@ -65,6 +65,9 @@ one_shot = true
 process_material = SubResource("ParticleProcessMaterial_dqkch")
 draw_pass_1 = SubResource("QuadMesh_qhqgy")
 
+[node name="Muzzle" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=1234567890]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.12, 0.37, -4.30)
+
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CameraPivot/Camera3D/WeaponHolder/Revolver" unique_id=632115472]
 transform = Transform3D(-8.742278e-09, 4.3711395e-09, -0.1, -0.1, 4.371139e-09, 8.742278e-09, 4.3711395e-09, 0.1, 4.371139e-09, -0.2, 1.7, 0)
 mesh = ExtResource("4_dqkch")
@@ -101,6 +104,17 @@ transform = Transform3D(1.9106854e-16, 4.371139e-09, 0.1, 0.1, -4.371139e-09, 0,
 mesh = ExtResource("7_fjrip")
 
 [node name="AudioShot" type="AudioStreamPlayer3D" parent="CameraPivot/Camera3D/WeaponHolder/Shotgun" unique_id=27521326]
+
+[node name="Muzzle" type="Node3D" parent="CameraPivot/Camera3D/WeaponHolder/Shotgun" unique_id=1234567891]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -0.5)
+
+[node name="MuzzleFlash" type="GPUParticles3D" parent="CameraPivot/Camera3D/WeaponHolder/Shotgun" unique_id=1234567892]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 2.5, -0.5)
+emitting = false
+lifetime = 0.1
+one_shot = true
+process_material = SubResource("ParticleProcessMaterial_dqkch")
+draw_pass_1 = SubResource("QuadMesh_qhqgy")
 
 [node name="RayCast3D" type="RayCast3D" parent="CameraPivot/Camera3D" unique_id=1883128150]
 target_position = Vector3(0, 0, -50)
