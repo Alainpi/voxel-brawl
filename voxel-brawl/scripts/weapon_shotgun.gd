@@ -21,7 +21,7 @@ func _fire() -> void:
 	_player.play_attack_anim("shoot")
 	_play_shot_effects()
 
-	var mouse_world := _player.get_mouse_world_pos()
+	var mouse_world: Vector3 = _player.get_mouse_world_pos()
 	if mouse_world == Vector3.ZERO:
 		return
 	var aim_flat := Vector3(

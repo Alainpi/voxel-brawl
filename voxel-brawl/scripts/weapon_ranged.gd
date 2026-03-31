@@ -56,7 +56,7 @@ func _fire() -> void:
 	_player.play_attack_anim("shoot")
 	_play_shot_effects()
 
-	var mouse_world := _player.get_mouse_world_pos()
+	var mouse_world: Vector3 = _player.get_mouse_world_pos()
 	if mouse_world == Vector3.ZERO:
 		return
 	var aim_flat := Vector3(
@@ -70,7 +70,7 @@ func _fire() -> void:
 
 # Fires a single ray. Override _fire() and call this multiple times for spread weapons.
 func _fire_ray(aim_dir_h: Vector3) -> void:
-	var chest := _player.global_position + Vector3(0.0, 1.2, 0.0)
+	var chest: Vector3 = _player.global_position + Vector3(0.0, 1.2, 0.0)
 	var space := get_world_3d().direct_space_state
 
 	# Ray 1 — horizontal wall check (layer 1 = static bodies only)
@@ -83,7 +83,7 @@ func _fire_ray(aim_dir_h: Vector3) -> void:
 	var wall_hit := space.intersect_ray(wall_params)
 
 	# Ray 2 — camera ray for precise voxel targeting (layer 2 = voxel areas only)
-	var cam_ray := _player.get_camera_ray()
+	var cam_ray: Dictionary = _player.get_camera_ray()
 	var cam_origin: Vector3 = cam_ray["origin"]
 	var cam_dir: Vector3 = cam_ray["dir"]
 	var voxel_params := PhysicsRayQueryParameters3D.create(
