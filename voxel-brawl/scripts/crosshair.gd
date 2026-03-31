@@ -9,7 +9,8 @@ const COLOR   := Color(1.0, 1.0, 1.0, 0.85)
 const DOT_R   := 1.5    # Center dot radius
 
 const RECOIL_SPREAD := 16.0  # Default pixels added to gap on fire
-const DECAY         := 14.0  # Default decay rate
+const DECAY         := 14.0  # Default decay rate (settles spread to ~5% in 0.19s at 60fps)
+const DECAY_CURVE   := 2.6   # Scales recovery_time -> decay_rate; tuned so DECAY = DECAY_CURVE / 0.188
 
 var _spread := 0.0
 var _decay_rate := DECAY
@@ -39,5 +40,5 @@ func _draw() -> void:
 # kick: pixels added to gap. recovery: seconds to settle back to zero.
 func recoil(kick: float = RECOIL_SPREAD, recovery: float = 0.188) -> void:
 	_spread = maxf(_spread, kick)
-	_decay_rate = 2.6 / maxf(recovery, 0.05)
+	_decay_rate = DECAY_CURVE / maxf(recovery, 0.05)
 	queue_redraw()
