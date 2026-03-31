@@ -18,6 +18,13 @@ var _cooldown := 0.0
 var _reloading := false
 var _reload_timer := 0.0
 
+@export var tracer_color := Color(1.0, 0.96, 0.63, 1.0)
+@export var recoil_shake_strength := 0.2
+@export var recoil_kick_amount    := 12.0
+@export var recoil_recovery_time  := 0.25
+
+@onready var muzzle: Node3D = $Muzzle
+
 signal ammo_changed(current: int, max_ammo: int)
 
 @onready var audio_shot: AudioStreamPlayer3D = $AudioShot
@@ -55,6 +62,7 @@ func _fire() -> void:
 	ammo_changed.emit(_ammo, max_ammo)
 	_player.play_attack_anim("shoot")
 	_play_shot_effects()
+	_apply_recoil()
 
 	var mouse_world: Vector3 = _player.get_mouse_world_pos()
 	if mouse_world == Vector3.ZERO:
@@ -69,13 +77,13 @@ func _fire() -> void:
 	_fire_ray(aim_flat.normalized())
 
 # Fires a single ray. Override _fire() and call this multiple times for spread weapons.
-func _fire_ray(aim_dir_h: Vector3) -> void:
-	var chest: Vector3 = _player.global_position + Vector3(0.0, 1.2, 0.0)
+func _fire_ray(aim_dir_h: Vector3, spread_angle: float = 0.0) -> void:
+	var muzzle_pos: Vector3 = muzzle.global_position
 	var space := get_world_3d().direct_space_state
 
-	# Ray 1 — horizontal wall check (layer 1 = static bodies only)
+	# Ray 1 — horizontal wall check from muzzle (layer 1 = static bodies only)
 	var wall_params := PhysicsRayQueryParameters3D.create(
-		chest, chest + aim_dir_h * RAY_LENGTH, 1
+		muzzle_pos, muzzle_pos + aim_dir_h * RAY_LENGTH, 1
 	)
 	wall_params.collide_with_areas = false
 	wall_params.collide_with_bodies = true
@@ -83,9 +91,12 @@ func _fire_ray(aim_dir_h: Vector3) -> void:
 	var wall_hit := space.intersect_ray(wall_params)
 
 	# Ray 2 — camera ray for precise voxel targeting (layer 2 = voxel areas only)
+	# spread_angle rotates it horizontally to match per-pellet spread direction.
 	var cam_ray: Dictionary = _player.get_camera_ray()
 	var cam_origin: Vector3 = cam_ray["origin"]
 	var cam_dir: Vector3 = cam_ray["dir"]
+	if spread_angle != 0.0:
+		cam_dir = cam_dir.rotated(Vector3.UP, spread_angle)
 	var voxel_params := PhysicsRayQueryParameters3D.create(
 		cam_origin, cam_origin + cam_dir * RAY_LENGTH, 2
 	)
@@ -95,19 +106,30 @@ func _fire_ray(aim_dir_h: Vector3) -> void:
 
 	var wall_dist_h := INF
 	if not wall_hit.is_empty():
-		wall_dist_h = Vector2(wall_hit.position.x - chest.x, wall_hit.position.z - chest.z).length()
+		wall_dist_h = Vector2(
+			wall_hit.position.x - muzzle_pos.x,
+			wall_hit.position.z - muzzle_pos.z
+		).length()
 
 	var voxel_dist_h := INF
 	if not voxel_hit.is_empty():
-		voxel_dist_h = Vector2(voxel_hit.position.x - chest.x, voxel_hit.position.z - chest.z).length()
+		voxel_dist_h = Vector2(
+			voxel_hit.position.x - muzzle_pos.x,
+			voxel_hit.position.z - muzzle_pos.z
+		).length()
 
 	if not wall_hit.is_empty() and wall_dist_h <= voxel_dist_h:
+		BulletTracer.spawn(muzzle_pos, wall_hit.position, tracer_color, get_tree().root)
 		_on_wall_hit(wall_hit.position, wall_hit.normal)
-		_player.trigger_crosshair_recoil()
 		return
 
 	if voxel_hit.is_empty():
+		BulletTracer.spawn(
+			muzzle_pos, cam_origin + cam_dir * RAY_LENGTH, tracer_color, get_tree().root
+		)
 		return
+
+	BulletTracer.spawn(muzzle_pos, voxel_hit.position, tracer_color, get_tree().root)
 
 	var area := voxel_hit.collider as Area3D
 	if area and area.has_meta("voxel_segment"):
@@ -118,8 +140,6 @@ func _fire_ray(aim_dir_h: Vector3) -> void:
 		if dda_result.hit:
 			var voxel_center := (Vector3(dda_result.voxel) + Vector3(0.5, 0.5, 0.5)) * VoxelSegment.VOXEL_SIZE
 			_apply_hit(seg, voxel_center)
-			_player.trigger_hit_shake()
-			_player.trigger_crosshair_recoil()
 
 # Override in subclasses for weapon-specific damage behaviour.
 func _apply_hit(seg: VoxelSegment, voxel_center: Vector3) -> void:
@@ -133,8 +153,7 @@ func _play_shot_effects() -> void:
 	if audio_shot.stream:
 		audio_shot.play()
 	if muzzle_flash:
-		muzzle_flash.global_position = _player.global_position + Vector3(0.0, 1.2, 0.0) \
-			+ (-_player.global_transform.basis.z * 0.5)
+		muzzle_flash.global_position = muzzle.global_position
 		muzzle_flash.restart()
 
 func _spawn_wall_impact(pos: Vector3, normal: Vector3) -> void:
@@ -157,6 +176,10 @@ func _spawn_wall_impact(pos: Vector3, normal: Vector3) -> void:
 	particles.one_shot = true
 	particles.emitting = true
 	get_tree().create_timer(0.4).timeout.connect(particles.queue_free)
+
+func _apply_recoil() -> void:
+	_player.trigger_hit_shake(recoil_shake_strength)
+	_player.trigger_crosshair_recoil(recoil_kick_amount, recoil_recovery_time)
 
 func _start_reload() -> void:
 	_reloading = true
