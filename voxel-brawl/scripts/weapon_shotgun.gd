@@ -5,7 +5,8 @@ extends WeaponRanged
 
 const PELLET_COUNT := 6
 
-@export var spread_near: float = 0.25          # half-angle radians at point-blank
+@export var spread_near: float = 0.25          # half-angle radians at point-blank (v1: only this is used)
+# v2 placeholders — reserved for distance-based falloff; not wired in v1.
 @export var spread_far: float  = 0.08          # half-angle radians at max range
 @export var spread_falloff_dist: float = 12.0  # distance (world units) where cone fully tightens
 
