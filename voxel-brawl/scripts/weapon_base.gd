@@ -4,7 +4,7 @@
 class_name WeaponBase
 extends Node3D
 
-var _player: Node3D
+var _player  # duck-typed: Player for player weapons, Brawler for NPC weapons
 
 enum WeaponType { BLUNT, SHARP, RANGED }
 var weapon_type: WeaponType = WeaponType.BLUNT
