@@ -4,22 +4,29 @@ extends CharacterBody3D
 
 signal died
 
-const SPEED := 3.0
-const GRAVITY := 9.8
-const CHASE_RANGE := 15.0
+const SPEED        := 3.0
+const GRAVITY      := 9.8
+const CHASE_RANGE  := 15.0
 const ATTACK_RANGE := 1.8
 const ATTACK_COOLDOWN := 1.5
-const ATTACK_DAMAGE := 20.0
-const CRAWL_SPEED := 1.2
+const CRAWL_SPEED  := 1.2
 
-# [vox_path, local_offset, root_axis]
+# [vox_path, bone_name, position_offset, attach_rot_x, attach_rot_z, scale, root_axis, seg_rot_x, seg_rot_y]
 const SEGMENT_CONFIG := {
-	"torso": ["res://assets/voxels/torso.vox", Vector3(-0.4, 2.2, -0.3), Vector3i.ZERO],
-	"head":  ["res://assets/voxels/head.vox",  Vector3(-0.3, 2.8, -0.3), Vector3i(0, -1, 0)],
-	"arm_l": ["res://assets/voxels/arm_l.vox", Vector3(-0.8, 2.2, -0.2), Vector3i(0, 1, 0)],
-	"arm_r": ["res://assets/voxels/arm_r.vox", Vector3(0.4,  2.2, -0.2), Vector3i(0, 1, 0)],
-	"leg_l": ["res://assets/voxels/leg_l.vox", Vector3(-0.4, 1.0, -0.2), Vector3i(0, 1, 0)],
-	"leg_r": ["res://assets/voxels/leg_r.vox", Vector3(0.0,  1.0, -0.2), Vector3i(0, 1, 0)],
+	"torso_bottom": ["res://assets/voxels/torso_bottom.vox", "torso_bottom", Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i.ZERO,    0,   0],
+	"torso_top":    ["res://assets/voxels/torso_top.vox",    "torso_top",    Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,-1,0), 0,   0],
+	"head_bottom":  ["res://assets/voxels/head_bottom.vox",  "head_bottom",  Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0],
+	"head_top":     ["res://assets/voxels/head_top.vox",     "head_top",     Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0],
+	"arm_r_upper":  ["res://assets/voxels/arm_r_upper.vox",  "arm_r_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0],
+	"arm_r_fore":   ["res://assets/voxels/arm_r_fore.vox",   "arm_r_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"hand_r":       ["res://assets/voxels/hand_r.vox",       "hand_r",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180],
+	"arm_l_upper":  ["res://assets/voxels/arm_l_upper.vox",  "arm_l_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0],
+	"arm_l_fore":   ["res://assets/voxels/arm_l_fore.vox",   "arm_l_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"hand_l":       ["res://assets/voxels/hand_l.vox",       "hand_l",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180],
+	"leg_r_upper":  ["res://assets/voxels/leg_r_upper.vox",  "leg_r_upper",  Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"leg_r_fore":   ["res://assets/voxels/leg_r_fore.vox",   "leg_r_fore",   Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"leg_l_upper":  ["res://assets/voxels/leg_l_upper.vox",  "leg_l_upper",  Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"leg_l_fore":   ["res://assets/voxels/leg_l_fore.vox",   "leg_l_fore",   Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
 }
 
 enum State { IDLE, CHASE, ATTACK, DEAD }
@@ -27,14 +34,18 @@ enum State { IDLE, CHASE, ATTACK, DEAD }
 var segments: Dictionary = {}
 var _state: State = State.IDLE
 var _is_dead: bool = false
+var _is_attacking: bool = false
 var _attack_timer: float = 0.0
 var _legs_lost: int = 0
 var _player: CharacterBody3D = null
+var _attachments: Array = []
+var _fists: WeaponFists = null
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
+@onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
 
 func _ready() -> void:
-	_build_segments()
+	call_deferred("_build_body")
 	call_deferred("_find_player")
 
 func _find_player() -> void:
@@ -59,6 +70,7 @@ func _physics_process(delta: float) -> void:
 		)
 
 	_update_ai()
+	_update_animation()
 	move_and_slide()
 
 func _update_ai() -> void:
@@ -98,12 +110,19 @@ func _update_ai() -> void:
 			elif _attack_timer <= 0.0:
 				_do_attack()
 
+func _update_animation() -> void:
+	if _is_attacking or anim_player == null:
+		return
+	var moving := velocity.length_squared() > 0.01
+	var target := "walk" if moving else "idle"
+	if anim_player.current_animation != target:
+		anim_player.play(target)
+
 func _move_toward_player() -> void:
 	nav_agent.target_position = _player.global_position
 	var next_pos := nav_agent.get_next_path_position()
 	var to_next := next_pos - global_position
 	to_next.y = 0.0
-	# Fallback to direct movement if nav gives no useful direction (no nav mesh baked)
 	if to_next.length_squared() < 0.04:
 		to_next = _player.global_position - global_position
 		to_next.y = 0.0
@@ -122,24 +141,72 @@ func _face_player() -> void:
 
 func _do_attack() -> void:
 	_attack_timer = ATTACK_COOLDOWN
-	if _player.has_method("take_damage"):
-		_player.take_damage(ATTACK_DAMAGE)
-	else:
-		print("Brawler punches player for %.0f damage!" % ATTACK_DAMAGE)
+	if _fists != null:
+		_fists.request_attack()
 
-func _build_segments() -> void:
+# --- Player interface (called by WeaponMelee) ---
+
+func play_attack_anim(_prefix: String) -> void:
+	var stances := ["punch_low", "punch_mid", "punch_high"]
+	var anim: String = stances[randi() % stances.size()]
+	_is_attacking = true
+	if anim_player:
+		anim_player.stop()
+		anim_player.play(anim)
+
+func trigger_hit_shake() -> void:
+	pass
+
+func trigger_crosshair_recoil() -> void:
+	pass
+
+# --- Body building ---
+
+func _build_body() -> void:
 	_is_dead = false
+	var old_ls := get_node_or_null("LimbSystem")
+	if old_ls != null:
+		old_ls.queue_free()
 	segments.clear()
+
+	for attach in _attachments:
+		if is_instance_valid(attach):
+			attach.queue_free()
+	_attachments.clear()
+
+	var skeleton: Skeleton3D = $PlayerModel.find_child("Skeleton3D", true, false)
+	if skeleton == null:
+		push_error("Brawler: Skeleton3D not found in PlayerModel")
+		return
+
+	for mesh in $PlayerModel.find_children("*", "MeshInstance3D", true, false):
+		mesh.visible = false
 
 	for seg_name in SEGMENT_CONFIG:
 		var cfg = SEGMENT_CONFIG[seg_name]
+		var vox_path: String = cfg[0]
+		var bone_name: String = cfg[1]
+
+		var bone_idx := skeleton.find_bone(bone_name)
+		if bone_idx == -1:
+			push_warning("Brawler: bone not found: " + bone_name)
+			continue
+
+		var attach := BoneAttachment3D.new()
+		attach.bone_name = bone_name
+		attach.bone_idx = bone_idx
+		attach.rotation_degrees = Vector3(cfg[3], 0.0, cfg[4])
+		skeleton.add_child(attach)
+		_attachments.append(attach)
+
 		var seg := VoxelSegment.new()
 		seg.name = "VoxelSegment_" + seg_name
-		seg.root_axis = cfg[2]
-		seg.position = cfg[1]
-		seg.rotation_degrees.x = 90
-		add_child(seg)
-		seg.load_from_vox(cfg[0])
+		seg.root_axis = cfg[6]
+		seg.position = cfg[2]
+		seg.scale = cfg[5]
+		seg.rotation_degrees = Vector3(cfg[7], cfg[8], 0.0)
+		attach.add_child(seg)
+		seg.load_from_vox(vox_path)
 
 		var area := Area3D.new()
 		var col := CollisionShape3D.new()
@@ -157,33 +224,70 @@ func _build_segments() -> void:
 		area.set_meta("voxel_segment", seg)
 		seg.add_child(area)
 
-		seg.detached.connect(_on_segment_detached.bind(seg_name))
 		segments[seg_name] = seg
 
-func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
-	if seg_name in ["torso", "head"] and not _is_dead:
-		_die()
-	elif seg_name in ["leg_l", "leg_r"]:
-		_legs_lost += 1
+	var limb_system := LimbSystem.new()
+	limb_system.name = "LimbSystem"
+	add_child(limb_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("limb_system", limb_system)
+	limb_system.initialize(segments)
+	limb_system.died.connect(_die)
+	limb_system.leg_lost.connect(_on_leg_lost)
+
+	if anim_player:
+		anim_player.animation_finished.connect(_on_anim_finished)
+		anim_player.play("idle")
+
+	_setup_fists()
+
+func _setup_fists() -> void:
+	if is_instance_valid(_fists):
+		_fists.queue_free()
+	_fists = WeaponFists.new()
+	_fists._player = self          # pre-set before add_child so WeaponBase._ready() skips path lookup
+	_fists.is_player_controlled = false
+	var audio := AudioStreamPlayer3D.new()
+	audio.name = "AudioStreamPlayer3D"
+	_fists.add_child(audio)        # must exist before _fists enters tree (@onready in WeaponMelee)
+	add_child(_fists)
+
+func _on_anim_finished(_anim_name: String) -> void:
+	_is_attacking = false
+
+func _on_leg_lost(_seg_name: String) -> void:
+	_legs_lost += 1
+
+# --- Death & reset ---
 
 func _die() -> void:
+	if _is_dead:
+		return
 	_is_dead = true
 	_state = State.DEAD
 	velocity = Vector3.ZERO
 	emit_signal("died")
-
 	for node in get_tree().get_nodes_in_group("detached_limb"):
 		node.queue_free()
-
 	await get_tree().create_timer(1.5).timeout
 	_reset()
 
 func _reset() -> void:
-	# Only free the voxel segments — CollisionShape3D and NavigationAgent3D stay
-	for child in get_children():
-		if child is VoxelSegment:
-			child.queue_free()
+	var old_ls := get_node_or_null("LimbSystem")
+	if old_ls != null:
+		old_ls.queue_free()
+	for attach in _attachments:
+		if is_instance_valid(attach):
+			attach.queue_free()
+	_attachments.clear()
+	segments.clear()
+	if is_instance_valid(_fists):
+		_fists.queue_free()
+		_fists = null
+	if anim_player and anim_player.animation_finished.is_connected(_on_anim_finished):
+		anim_player.animation_finished.disconnect(_on_anim_finished)
 	await get_tree().process_frame
 	_legs_lost = 0
+	_is_attacking = false
 	_state = State.IDLE
-	_build_segments()
+	_build_body()
