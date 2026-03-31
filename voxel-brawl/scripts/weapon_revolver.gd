@@ -10,3 +10,7 @@ func _configure() -> void:
 	fire_rate = 0.55
 	max_ammo = 6
 	reload_time = 1.5
+	tracer_color = Color(1.0, 0.96, 0.63, 1.0)
+	recoil_shake_strength = 0.35
+	recoil_kick_amount = 18.0
+	recoil_recovery_time = 0.25
