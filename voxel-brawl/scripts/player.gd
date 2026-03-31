@@ -59,6 +59,7 @@ var _is_attacking: bool = false
 var _cam_rotating := false
 var _cam_velocity := 0.0   # rad/s — persists after release for slide
 var _cam_drag_x := 0.0     # pixel accumulator between physics ticks
+var _shake_strength := 0.0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -147,6 +148,16 @@ func _physics_process(delta: float) -> void:
 		global_position, CAM_FOLLOW_SPEED * delta
 	)
 
+	# Screen shake — small random XZ offset that decays quickly
+	if _shake_strength > 0.005:
+		var shake_offset := Vector3(
+			randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)
+		) * _shake_strength * 0.12
+		camera_pivot.global_position += shake_offset
+		_shake_strength = lerpf(_shake_strength, 0.0, 18.0 * delta)
+	else:
+		_shake_strength = 0.0
+
 	if _is_dead:
 		return
 
@@ -212,7 +223,7 @@ func _update_animation(_dir: Vector3) -> void:
 	if _is_attacking:
 		return
 	if _current_weapon == revolver or _current_weapon == shotgun:
-		anim_player.play("holding-right")
+		anim_player.play("holding_right")
 	elif _current_weapon == bat:
 		anim_player.play("bat-hold")
 	elif _current_weapon == katana:
@@ -272,19 +283,19 @@ func _on_ammo_changed(current: int, max_ammo: int) -> void:
 	if hud:
 		hud.update_ammo(current, max_ammo)
 
-# Called by weapons on hit — no-op for top-down (no FPS shake)
-func trigger_hit_shake() -> void:
-	pass
+# Called by weapons on fire — short camera jolt. strength: 0.0–1.0 scale.
+func trigger_hit_shake(strength: float = 0.2) -> void:
+	_shake_strength = maxf(_shake_strength, strength)
 
-func trigger_crosshair_recoil() -> void:
+func trigger_crosshair_recoil(kick: float = 12.0, recovery: float = 0.25) -> void:
 	var hud := get_node_or_null("/root/test_scene/hud")
 	if hud:
-		hud.recoil()
+		hud.recoil(kick, recovery)
 
 func play_attack_anim(anim_name: String) -> void:
 	var mapped: String
 	if anim_name == "shoot":
-		mapped = "holding-right-shoot"
+		mapped = "holding_right_shoot"
 	else:
 		var stance_key: String = StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
 		mapped = anim_name + "_" + stance_key
