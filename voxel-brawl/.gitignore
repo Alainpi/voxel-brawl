@@ -10,3 +10,6 @@ Thumbs.db
 
 # Godot temp files
 *.tmp
+
+# Git worktrees
+.worktrees/
