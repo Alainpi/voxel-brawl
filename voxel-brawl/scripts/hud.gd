@@ -17,8 +17,8 @@ func _ready() -> void:
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_crosshair)
 
-func recoil() -> void:
-	_crosshair.recoil()
+func recoil(kick: float = 16.0, recovery: float = 0.188) -> void:
+	_crosshair.recoil(kick, recovery)
 
 func update_ammo(current: int, max_ammo: int) -> void:
 	ammo_label.text = "%d / %d" % [current, max_ammo]

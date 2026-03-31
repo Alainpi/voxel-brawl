@@ -8,14 +8,15 @@ const THICK   := 2.0    # Line thickness
 const COLOR   := Color(1.0, 1.0, 1.0, 0.85)
 const DOT_R   := 1.5    # Center dot radius
 
-const RECOIL_SPREAD := 16.0  # Pixels added to gap on fire
-const DECAY         := 14.0  # How fast spread returns to 0 (higher = snappier)
+const RECOIL_SPREAD := 16.0  # Default pixels added to gap on fire
+const DECAY         := 14.0  # Default decay rate
 
 var _spread := 0.0
+var _decay_rate := DECAY
 
 func _process(delta: float) -> void:
 	if _spread > 0.05:
-		_spread = lerpf(_spread, 0.0, DECAY * delta)
+		_spread = lerpf(_spread, 0.0, _decay_rate * delta)
 	elif _spread > 0.0:
 		_spread = 0.0
 	queue_redraw()  # Always redraw — crosshair must follow mouse every frame
@@ -35,6 +36,8 @@ func _draw() -> void:
 	# Center dot
 	draw_circle(c, DOT_R, COLOR)
 
-func recoil() -> void:
-	_spread = RECOIL_SPREAD
+# kick: pixels added to gap. recovery: seconds to settle back to zero.
+func recoil(kick: float = RECOIL_SPREAD, recovery: float = 0.188) -> void:
+	_spread = maxf(_spread, kick)
+	_decay_rate = 2.6 / maxf(recovery, 0.05)
 	queue_redraw()
