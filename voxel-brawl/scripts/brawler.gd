@@ -163,7 +163,6 @@ func trigger_crosshair_recoil() -> void:
 # --- Body building ---
 
 func _build_body() -> void:
-	_is_dead = false
 	var old_ls := get_node_or_null("LimbSystem")
 	if old_ls != null:
 		old_ls.queue_free()
@@ -289,5 +288,6 @@ func _reset() -> void:
 	await get_tree().process_frame
 	_legs_lost = 0
 	_is_attacking = false
+	_is_dead = false
 	_state = State.IDLE
 	_build_body()
