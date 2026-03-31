@@ -223,7 +223,7 @@ func _update_animation(_dir: Vector3) -> void:
 	if _is_attacking:
 		return
 	if _current_weapon == revolver or _current_weapon == shotgun:
-		anim_player.play("holding-right")
+		anim_player.play("holding_right")
 	elif _current_weapon == bat:
 		anim_player.play("bat-hold")
 	elif _current_weapon == katana:
@@ -295,7 +295,7 @@ func trigger_crosshair_recoil(kick: float = 12.0, recovery: float = 0.25) -> voi
 func play_attack_anim(anim_name: String) -> void:
 	var mapped: String
 	if anim_name == "shoot":
-		mapped = "holding-right-shoot"
+		mapped = "holding_right_shoot"
 	else:
 		var stance_key: String = StanceManager.Stance.find_key(stance_manager.current_stance()).to_lower()
 		mapped = anim_name + "_" + stance_key
