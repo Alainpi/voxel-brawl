@@ -18,7 +18,7 @@
 [ext_resource type="PackedScene" uid="uid://b230ax883pehx" path="res://corridor_end_2.tscn" id="15_hf2sn"]
 [ext_resource type="PackedScene" uid="uid://b0qx71sln06ss" path="res://room_large_2.tscn" id="16_qq5q4"]
 [ext_resource type="PackedScene" uid="uid://brawler0001sc" path="res://scenes/brawler.tscn" id="17_brawl"]
-[ext_resource type="PackedScene" uid="uid://pickup0001sc" path="res://scenes/weapons/weapon_pickup.tscn" id="18_pickup"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/weapon_pickup.tscn" id="18_pickup"]
 
 [node name="test_scene" type="Node3D" unique_id=114047288]
 script = ExtResource("1_wtsjf")
@@ -233,10 +233,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 26)
 [node name="Brawler" parent="." unique_id=2066104718 instance=ExtResource("17_brawl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 27.220387)
 
-[node name="WeaponPickupBat" parent="." instance=ExtResource("18_pickup")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 2)
+[node name="WeaponPickupBat" parent="." unique_id=721536356 instance=ExtResource("18_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.1, 2)
 weapon_id = &"bat"
 
-[node name="WeaponPickupRevolver" parent="." instance=ExtResource("18_pickup")]
+[node name="WeaponPickupRevolver" parent="." unique_id=926061870 instance=ExtResource("18_pickup")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -2)
 weapon_id = &"revolver"

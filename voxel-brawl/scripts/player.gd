@@ -314,13 +314,10 @@ func _drop_weapon(slot: int) -> void:
 
 func _update_pickup_highlight() -> void:
 	var space := get_world_3d().direct_space_state
-	var cam_origin := camera.global_position
-	var cam_forward := -camera.global_transform.basis.z
-	var params := PhysicsRayQueryParameters3D.create(
-		cam_origin,
-		cam_origin + cam_forward * 3.0,
-		4  # layer 3 only (weapon_pickups)
-	)
+	var mouse_pos := get_viewport().get_mouse_position()
+	var ray_from := camera.project_ray_origin(mouse_pos)
+	var ray_to := ray_from + camera.project_ray_normal(mouse_pos) * 20.0
+	var params := PhysicsRayQueryParameters3D.create(ray_from, ray_to, 4)
 	params.collide_with_areas = false
 	var result := space.intersect_ray(params)
 	if result and result.collider is WeaponPickup:

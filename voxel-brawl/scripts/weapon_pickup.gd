@@ -20,6 +20,7 @@ func _ready() -> void:
 	var m = WeaponRegistry.get_mesh(weapon_id)
 	if m:
 		_mesh.mesh = m
+		_mesh.scale = Vector3.ONE * WeaponRegistry.get_pickup_scale(weapon_id)
 	rotation_degrees = WeaponRegistry.get_pickup_rotation(weapon_id)
 
 func get_weapon_id() -> StringName:

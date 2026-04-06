@@ -19,6 +19,7 @@ var _data: Dictionary = {
 		"display_name": "Bat",
 		"slot": Slot.MELEE,
 		"pickup_rotation": Vector3(90, 0, 0),
+		"pickup_scale": 0.15,
 	},
 	&"katana": {
 		"scene": preload("res://scenes/weapons/katana.tscn"),
@@ -26,20 +27,23 @@ var _data: Dictionary = {
 		"display_name": "Katana",
 		"slot": Slot.MELEE,
 		"pickup_rotation": Vector3(90, 0, 0),
+		"pickup_scale": 0.15,
 	},
 	&"revolver": {
 		"scene": preload("res://scenes/weapons/revolver.tscn"),
 		"mesh": preload("res://assets/models/Weapons/Revolver.obj"),
 		"display_name": "Revolver",
 		"slot": Slot.RANGED,
-		"pickup_rotation": Vector3(90, 0, 0),
+		"pickup_rotation": Vector3(0, 0, 0),
+		"pickup_scale": 0.15,
 	},
 	&"shotgun": {
 		"scene": preload("res://scenes/weapons/shotgun.tscn"),
 		"mesh": preload("res://assets/models/Weapons/Shotgun.obj"),
 		"display_name": "Shotgun",
 		"slot": Slot.RANGED,
-		"pickup_rotation": Vector3(90, 0, 0),
+		"pickup_rotation": Vector3(0, 0, 0),
+		"pickup_scale": 0.15,
 	},
 }
 
@@ -57,6 +61,9 @@ func get_slot(id: StringName) -> Slot:
 
 func get_pickup_rotation(id: StringName) -> Vector3:
 	return _data[id]["pickup_rotation"]
+
+func get_pickup_scale(id: StringName) -> float:
+	return _data[id]["pickup_scale"]
 
 func has(id: StringName) -> bool:
 	return _data.has(id)
