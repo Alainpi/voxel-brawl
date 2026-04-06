@@ -5,14 +5,15 @@ class_name WeaponBase
 extends Node3D
 
 var _player  # duck-typed: Player for player weapons, Brawler for NPC weapons
+var weapon_id: StringName = &""  # set by Player.give_weapon() after instantiation
 
 enum WeaponType { BLUNT, SHARP, RANGED }
 var weapon_type: WeaponType = WeaponType.BLUNT
 
 func _ready() -> void:
 	_configure()
-	if _player == null:
-		_player = get_node("../../../../")
+	# _player must be set externally via weapon._player = self after instantiation.
+	# Do not fall back to get_node() — the weapon may be instanced into any holder.
 
 # Override in each concrete weapon class to set stats.
 func _configure() -> void:
