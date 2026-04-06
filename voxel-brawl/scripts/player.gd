@@ -21,11 +21,6 @@ const CRAWL_SPEED := 1.2
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
 @onready var weapon_holder: Node3D = $CameraPivot/Camera3D/WeaponHolder
-@onready var fists: WeaponFists = $CameraPivot/Camera3D/WeaponHolder/Fists
-@onready var revolver: WeaponRevolver = $CameraPivot/Camera3D/WeaponHolder/Revolver
-@onready var bat: WeaponBat = $CameraPivot/Camera3D/WeaponHolder/Bat
-@onready var katana: WeaponKatana = $CameraPivot/Camera3D/WeaponHolder/Katana
-@onready var shotgun: WeaponShotgun = $CameraPivot/Camera3D/WeaponHolder/Shotgun
 @onready var stance_manager: StanceManager = $StanceManager
 
 # [vox_path, bone_name, position_offset, attach_rot_x, attach_rot_z, scale, root_axis, seg_rot_x, seg_rot_y]
@@ -55,6 +50,17 @@ var _legs_lost: int = 0
 var _weapon_anchor: Node3D = null
 
 var _current_weapon: Node = null
+
+const SLOT_FISTS  = 0
+const SLOT_MELEE  = 1
+const SLOT_RANGED = 2
+
+var _inventory: Array = [null, null, null]
+var _current_slot: int = 0
+var _highlighted_pickup = null  # WeaponPickup or null
+
+var _pickup_scene: PackedScene = preload("res://scenes/weapons/weapon_pickup.tscn")
+
 var _is_attacking: bool = false
 var _cam_rotating := false
 var _cam_velocity := 0.0   # rad/s — persists after release for slide
@@ -101,9 +107,12 @@ func _ready() -> void:
 	add_child(fov_overlay)
 	fov_overlay.setup(self, fov_mat)
 
-	revolver.ammo_changed.connect(_on_ammo_changed)
-	shotgun.ammo_changed.connect(_on_ammo_changed)
-	_equip_weapon.call_deferred(fists)
+	var fists_instance := WeaponRegistry.get_scene(&"fists").instantiate() as WeaponBase
+	fists_instance._player = self
+	fists_instance.weapon_id = &"fists"
+	weapon_holder.add_child(fists_instance)
+	_inventory[SLOT_FISTS] = fists_instance
+	_equip_slot.call_deferred(SLOT_FISTS)
 	stance_manager.stance_changed.connect(_on_stance_changed)
 	anim_player.animation_finished.connect(_on_anim_finished)
 	call_deferred("_build_voxel_body")
@@ -124,15 +133,13 @@ func _input(event: InputEvent) -> void:
 		_cam_drag_x -= event.relative.x
 
 	if event.is_action_pressed("switch_weapon_1"):
-		_equip_weapon(fists)
+		_equip_slot(SLOT_FISTS)
 	if event.is_action_pressed("switch_weapon_2"):
-		_equip_weapon(revolver)
+		_equip_slot(SLOT_MELEE)
 	if event.is_action_pressed("switch_weapon_3"):
-		_equip_weapon(bat)
-	if event.is_action_pressed("switch_weapon_4"):
-		_equip_weapon(katana)
-	if event.is_action_pressed("switch_weapon_5"):
-		_equip_weapon(shotgun)
+		_equip_slot(SLOT_RANGED)
+	if event.is_action_pressed("drop_weapon"):
+		_drop_weapon(_current_slot)
 
 func _physics_process(delta: float) -> void:
 	# Camera orbit: while dragging, velocity = exact mouse input; after release, friction glides to zero
@@ -222,11 +229,11 @@ func get_mouse_world_pos() -> Vector3:
 func _update_animation(_dir: Vector3) -> void:
 	if _is_attacking:
 		return
-	if _current_weapon == revolver or _current_weapon == shotgun:
+	if _current_weapon is WeaponRanged:
 		anim_player.play("holding_right")
-	elif _current_weapon == bat:
+	elif _current_weapon is WeaponBat:
 		anim_player.play("bat-hold")
-	elif _current_weapon == katana:
+	elif _current_weapon is WeaponKatana:
 		anim_player.play("katana-hold")
 	else:
 		var speed_h := Vector2(velocity.x, velocity.z).length()
@@ -235,24 +242,58 @@ func _update_animation(_dir: Vector3) -> void:
 		else:
 			anim_player.play("idle")
 
-func _equip_weapon(weapon: Node) -> void:
+func _equip_slot(idx: int) -> void:
+	if idx != SLOT_FISTS and _inventory[idx] == null:
+		return
 	_is_attacking = false
-	fists.visible = (weapon == fists)
-	revolver.visible = (weapon == revolver)
-	bat.visible = (weapon == bat)
-	katana.visible = (weapon == katana)
-	shotgun.visible = (weapon == shotgun)
-	fists.set_physics_process(weapon == fists)
-	revolver.set_physics_process(weapon == revolver)
-	bat.set_physics_process(weapon == bat)
-	katana.set_physics_process(weapon == katana)
-	shotgun.set_physics_process(weapon == shotgun)
-	_current_weapon = weapon
+	if _current_weapon != null:
+		_current_weapon.visible = false
+		_current_weapon.set_physics_process(false)
+	_current_slot = idx
+	_current_weapon = _inventory[idx]
+	if _current_weapon != null:
+		_current_weapon.visible = true
+		_current_weapon.set_physics_process(true)
 	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud:
-		var names := {fists: "Fists", revolver: "Revolver", bat: "Bat", katana: "Katana", shotgun: "Shotgun"}
-		hud.set_weapon_name(names.get(weapon, ""))
-	_update_stance_for_weapon(weapon)
+	if hud and _current_weapon != null:
+		var wb := _current_weapon as WeaponBase
+		hud.set_weapon_name(WeaponRegistry.get_display_name(wb.weapon_id))
+	_update_stance_for_weapon(_current_weapon)
+
+func give_weapon(id: StringName) -> void:
+	if not WeaponRegistry.has(id):
+		push_error("give_weapon: unknown weapon id: " + id)
+		return
+	var slot := WeaponRegistry.get_slot(id)
+	if _inventory[slot] != null:
+		_drop_weapon(slot)
+	var instance := WeaponRegistry.get_scene(id).instantiate() as WeaponBase
+	instance._player = self
+	instance.weapon_id = id
+	if instance is WeaponRanged:
+		(instance as WeaponRanged).ammo_changed.connect(_on_ammo_changed)
+	weapon_holder.add_child(instance)
+	instance.visible = false
+	instance.set_physics_process(false)
+	_inventory[slot] = instance
+	_equip_slot(slot)
+
+func _drop_weapon(slot: int) -> void:
+	if slot == SLOT_FISTS:
+		return
+	var weapon: WeaponBase = _inventory[slot]
+	if weapon == null:
+		return
+	var pickup = _pickup_scene.instantiate()
+	pickup.weapon_id = weapon.weapon_id
+	get_tree().current_scene.add_child(pickup)
+	var forward := -global_transform.basis.z
+	pickup.global_position = global_position + forward * 1.0
+	pickup.global_position.y = 0.1
+	weapon.queue_free()
+	_inventory[slot] = null
+	if _current_slot == slot:
+		_equip_slot(SLOT_FISTS)
 
 func _update_stance_for_weapon(weapon: Node) -> void:
 	if not weapon is WeaponBase:
