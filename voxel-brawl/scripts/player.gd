@@ -57,7 +57,7 @@ const SLOT_RANGED = 2
 
 var _inventory: Array = [null, null, null]
 var _current_slot: int = 0
-var _highlighted_pickup = null  # WeaponPickup or null
+var _highlighted_pickup = null  # WeaponPickup or null — populated in Task 9 (pickup raycast)
 
 var _pickup_scene: PackedScene = preload("res://scenes/weapons/weapon_pickup.tscn")
 
@@ -286,10 +286,10 @@ func _drop_weapon(slot: int) -> void:
 		return
 	var pickup = _pickup_scene.instantiate()
 	pickup.weapon_id = weapon.weapon_id
-	get_tree().current_scene.add_child(pickup)
 	var forward := -global_transform.basis.z
-	pickup.global_position = global_position + forward * 1.0
-	pickup.global_position.y = 0.1
+	pickup.position = global_position + forward * 1.0
+	pickup.position.y = global_position.y + 0.1
+	get_tree().current_scene.add_child(pickup)
 	weapon.queue_free()
 	_inventory[slot] = null
 	if _current_slot == slot:
