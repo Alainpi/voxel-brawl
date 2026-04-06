@@ -319,14 +319,14 @@ func _update_pickup_highlight() -> void:
 	if result and result.collider is WeaponPickup:
 		var pickup := result.collider as WeaponPickup
 		if pickup != _highlighted_pickup:
-			if _highlighted_pickup:
+			if is_instance_valid(_highlighted_pickup):
 				_highlighted_pickup.highlight(false)
 			pickup.highlight(true)
 			_highlighted_pickup = pickup
 		if hud:
 			hud.show_pickup_prompt(WeaponRegistry.get_display_name(pickup.weapon_id))
 	else:
-		if _highlighted_pickup:
+		if is_instance_valid(_highlighted_pickup):
 			_highlighted_pickup.highlight(false)
 			_highlighted_pickup = null
 		if hud:
