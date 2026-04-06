@@ -13,6 +13,9 @@ static var _highlight_mat: StandardMaterial3D = preload("res://assets/materials/
 func _ready() -> void:
 	if weapon_id == &"":
 		return
+	if not WeaponRegistry.has(weapon_id):
+		push_error("WeaponPickup: unknown weapon_id '%s'" % weapon_id)
+		return
 	var m = WeaponRegistry.get_mesh(weapon_id)
 	if m:
 		_mesh.mesh = m
