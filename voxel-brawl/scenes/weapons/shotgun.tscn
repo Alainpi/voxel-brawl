@@ -1,0 +1,43 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://d0k5d1j66nlsg" path="res://scripts/weapon_shotgun.gd" id="1_sg"]
+[ext_resource type="ArrayMesh" uid="uid://myxw77h63uyf" path="res://assets/models/Weapons/Shotgun.obj" id="2_sg"]
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_sg"]
+spread = 180.0
+initial_velocity_min = 2.0
+initial_velocity_max = 5.0
+gravity = Vector3(0, 0, 0)
+linear_accel_min = 1.9999977
+linear_accel_max = 4.9999976
+color = Color(1, 1, 0, 1)
+
+[sub_resource type="StandardMaterial3D" id="SMat_sg"]
+albedo_color = Color(1, 1, 0, 1)
+emission_enabled = true
+emission = Color(1, 0.8784314, 0, 1)
+emission_energy_multiplier = 3.04
+
+[sub_resource type="QuadMesh" id="QMesh_sg"]
+material = SubResource("SMat_sg")
+
+[node name="Shotgun" type="Node3D"]
+transform = Transform3D(2, 0, 0, 0, 3, 0, 0, 0, 2, 0.5, -3.3, -1.5)
+script = ExtResource("1_sg")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.9106854e-16, 4.371139e-09, 0.1, 0.1, -4.371139e-09, 0, 4.371139e-09, 0.1, -4.371139e-09, -0.15, 1.8, -0.35)
+mesh = ExtResource("2_sg")
+
+[node name="AudioShot" type="AudioStreamPlayer3D" parent="."]
+
+[node name="Muzzle" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 0)
+
+[node name="MuzzleFlash" type="GPUParticles3D" parent="."]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 2.5, -0.5)
+emitting = false
+lifetime = 0.1
+one_shot = true
+process_material = SubResource("PPM_sg")
+draw_pass_1 = SubResource("QMesh_sg")

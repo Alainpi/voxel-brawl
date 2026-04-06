@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://lmskr730xnbd" path="res://scripts/weapon_bat.gd" id="1_bat"]
+[ext_resource type="ArrayMesh" uid="uid://b8wf2l20ep17i" path="res://assets/models/Weapons/Bat.obj" id="2_bat"]
+
+[node name="Bat" type="Node3D"]
+transform = Transform3D(-2, 0, -1.7484555e-07, 0, 2, 0, 1.7484555e-07, 0, -2, -1, -0.2, 1)
+script = ExtResource("1_bat")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.2, 0, 0, 0, -8.742278e-09, 0.2, 0, -0.2, -8.742278e-09, -0.3, 0.4, 0.08)
+mesh = ExtResource("2_bat")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="."]

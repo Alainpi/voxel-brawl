@@ -1,0 +1,43 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://cjg0e028qa28w" path="res://scripts/weapon_revolver.gd" id="1_rev"]
+[ext_resource type="ArrayMesh" uid="uid://dgvoqqf33nkms" path="res://assets/models/Weapons/Revolver.obj" id="2_rev"]
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_rev"]
+spread = 180.0
+initial_velocity_min = 2.0
+initial_velocity_max = 5.0
+gravity = Vector3(0, 0, 0)
+linear_accel_min = 1.9999977
+linear_accel_max = 4.9999976
+color = Color(1, 1, 0, 1)
+
+[sub_resource type="StandardMaterial3D" id="SMat_rev"]
+albedo_color = Color(1, 1, 0, 1)
+emission_enabled = true
+emission = Color(1, 0.8784314, 0, 1)
+emission_energy_multiplier = 3.04
+
+[sub_resource type="QuadMesh" id="QMesh_rev"]
+material = SubResource("SMat_rev")
+
+[node name="Revolver" type="Node3D"]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0.5, -2, -1.5)
+script = ExtResource("1_rev")
+
+[node name="AudioShot" type="AudioStreamPlayer3D" parent="."]
+
+[node name="MuzzleFlash" type="GPUParticles3D" parent="."]
+transform = Transform3D(0.5, 5.5879354e-09, 0, 0, 0.5000002, 0, 0, 0, 0.5000002, -1.1211715, 0.37002587, -4.3010073)
+emitting = false
+lifetime = 0.1
+one_shot = true
+process_material = SubResource("PPM_rev")
+draw_pass_1 = SubResource("QMesh_rev")
+
+[node name="Muzzle" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(-8.742278e-09, 4.3711395e-09, -0.1, -0.1, 4.371139e-09, 8.742278e-09, 4.3711395e-09, 0.1, 4.371139e-09, -0.2, 1.7, 0)
+mesh = ExtResource("2_rev")

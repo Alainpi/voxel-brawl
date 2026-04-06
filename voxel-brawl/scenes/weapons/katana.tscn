@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://dwse7y3f3gwbr" path="res://scripts/weapon_katana.gd" id="1_katana"]
+[ext_resource type="ArrayMesh" uid="uid://b6g60nh4cdtf8" path="res://assets/models/Weapons/Katana.obj" id="2_katana"]
+
+[node name="Katana" type="Node3D"]
+transform = Transform3D(2, -1.7484555e-07, -1.7484555e-07, -1.7484555e-07, -2, 0, -1.7484555e-07, 1.5285484e-14, -2, 0.45, 1.05, 1)
+script = ExtResource("1_katana")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, -1.05, 0.15, -0.6)
+mesh = ExtResource("2_katana")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="."]
