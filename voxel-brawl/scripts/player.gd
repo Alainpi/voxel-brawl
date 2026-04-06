@@ -55,9 +55,10 @@ const SLOT_FISTS  = 0
 const SLOT_MELEE  = 1
 const SLOT_RANGED = 2
 
-var _inventory: Array = [null, null, null]
+var _inventory: Array[WeaponBase] = [null, null, null]
 var _current_slot: int = 0
-var _highlighted_pickup = null  # WeaponPickup or null — populated in Task 9 (pickup raycast)
+var _highlighted_pickup = null  # WeaponPickup or null
+var _hud: Node = null
 
 var _pickup_scene: PackedScene = preload("res://scenes/weapons/weapon_pickup.tscn")
 
@@ -115,6 +116,7 @@ func _ready() -> void:
 	_equip_slot.call_deferred(SLOT_FISTS)
 	stance_manager.stance_changed.connect(_on_stance_changed)
 	anim_player.animation_finished.connect(_on_anim_finished)
+	_hud = get_node_or_null("/root/test_scene/hud")
 	call_deferred("_build_voxel_body")
 
 func _input(event: InputEvent) -> void:
@@ -145,9 +147,8 @@ func _input(event: InputEvent) -> void:
 			give_weapon(_highlighted_pickup.weapon_id)
 			_highlighted_pickup.queue_free()
 			_highlighted_pickup = null
-			var hud := get_node_or_null("/root/test_scene/hud")
-			if hud:
-				hud.hide_pickup_prompt()
+			if _hud:
+				_hud.hide_pickup_prompt()
 
 func _physics_process(delta: float) -> void:
 	# Camera orbit: while dragging, velocity = exact mouse input; after release, friction glides to zero
@@ -214,6 +215,10 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_animation(dir)
+
+func _process(_delta: float) -> void:
+	if not is_multiplayer_authority() or _is_dead:
+		return
 	_update_pickup_highlight()
 
 # Returns camera ray origin and direction for the current mouse position.
@@ -263,10 +268,9 @@ func _equip_slot(idx: int) -> void:
 	if _current_weapon != null:
 		_current_weapon.visible = true
 		_current_weapon.set_physics_process(true)
-	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud and _current_weapon != null:
+	if _hud and _current_weapon != null:
 		var wb := _current_weapon as WeaponBase
-		hud.set_weapon_name(WeaponRegistry.get_display_name(wb.weapon_id))
+		_hud.set_weapon_name(WeaponRegistry.get_display_name(wb.weapon_id))
 	_update_stance_for_weapon(_current_weapon)
 
 func give_weapon(id: StringName) -> void:
@@ -286,6 +290,8 @@ func give_weapon(id: StringName) -> void:
 	instance.set_physics_process(false)
 	_inventory[slot] = instance
 	_equip_slot(slot)
+	if instance is WeaponRanged:
+		_on_ammo_changed((instance as WeaponRanged)._ammo, (instance as WeaponRanged).max_ammo)
 
 func _drop_weapon(slot: int) -> void:
 	if slot == SLOT_FISTS:
@@ -299,6 +305,8 @@ func _drop_weapon(slot: int) -> void:
 	pickup.position = global_position + forward * 1.0
 	pickup.position.y = global_position.y + 0.1
 	get_tree().current_scene.add_child(pickup)
+	if weapon is WeaponRanged:
+		(weapon as WeaponRanged).ammo_changed.disconnect(_on_ammo_changed)
 	weapon.queue_free()
 	_inventory[slot] = null
 	if _current_slot == slot:
@@ -315,7 +323,6 @@ func _update_pickup_highlight() -> void:
 	)
 	params.collide_with_areas = false
 	var result := space.intersect_ray(params)
-	var hud := get_node_or_null("/root/test_scene/hud")
 	if result and result.collider is WeaponPickup:
 		var pickup := result.collider as WeaponPickup
 		if pickup != _highlighted_pickup:
@@ -323,14 +330,14 @@ func _update_pickup_highlight() -> void:
 				_highlighted_pickup.highlight(false)
 			pickup.highlight(true)
 			_highlighted_pickup = pickup
-		if hud:
-			hud.show_pickup_prompt(WeaponRegistry.get_display_name(pickup.weapon_id))
+		if _hud:
+			_hud.show_pickup_prompt(WeaponRegistry.get_display_name(pickup.weapon_id))
 	else:
 		if is_instance_valid(_highlighted_pickup):
 			_highlighted_pickup.highlight(false)
 			_highlighted_pickup = null
-		if hud:
-			hud.hide_pickup_prompt()
+		if _hud:
+			_hud.hide_pickup_prompt()
 
 func _update_stance_for_weapon(weapon: Node) -> void:
 	if not weapon is WeaponBase:
@@ -344,31 +351,27 @@ func _update_stance_for_weapon(weapon: Node) -> void:
 		WeaponBase.WeaponType.RANGED:
 			pass  # no setup — scroll is no-op via WeaponMelee check
 	# Always update HUD immediately on equip — setup() does not emit stance_changed
-	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud:
+	if _hud:
 		if wb.weapon_type == WeaponBase.WeaponType.RANGED:
-			hud.update_stance(StanceManager.Stance.MID, [] as Array[StanceManager.Stance])
+			_hud.update_stance(StanceManager.Stance.MID, [] as Array[StanceManager.Stance])
 		else:
-			hud.update_stance(stance_manager.current_stance(), stance_manager.current_stances())
+			_hud.update_stance(stance_manager.current_stance(), stance_manager.current_stances())
 
 func _on_stance_changed(stance: StanceManager.Stance) -> void:
-	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud:
-		hud.update_stance(stance, stance_manager.current_stances())
+	if _hud:
+		_hud.update_stance(stance, stance_manager.current_stances())
 
 func _on_ammo_changed(current: int, max_ammo: int) -> void:
-	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud:
-		hud.update_ammo(current, max_ammo)
+	if _hud:
+		_hud.update_ammo(current, max_ammo)
 
 # Called by weapons on fire — short camera jolt. strength: 0.0–1.0 scale.
 func trigger_hit_shake(strength: float = 0.2) -> void:
 	_shake_strength = maxf(_shake_strength, strength)
 
 func trigger_crosshair_recoil(kick: float = 12.0, recovery: float = 0.25) -> void:
-	var hud := get_node_or_null("/root/test_scene/hud")
-	if hud:
-		hud.recoil(kick, recovery)
+	if _hud:
+		_hud.recoil(kick, recovery)
 
 func play_attack_anim(anim_name: String) -> void:
 	var mapped: String

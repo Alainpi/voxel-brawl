@@ -12,6 +12,7 @@ static var _highlight_mat: StandardMaterial3D = preload("res://assets/materials/
 
 func _ready() -> void:
 	if weapon_id == &"":
+		push_error("WeaponPickup: weapon_id not set on %s" % name)
 		return
 	if not WeaponRegistry.has(weapon_id):
 		push_error("WeaponPickup: unknown weapon_id '%s'" % weapon_id)
@@ -20,6 +21,9 @@ func _ready() -> void:
 	if m:
 		_mesh.mesh = m
 	rotation_degrees = WeaponRegistry.get_pickup_rotation(weapon_id)
+
+func get_weapon_id() -> StringName:
+	return weapon_id
 
 func highlight(on: bool) -> void:
 	_mesh.material_overlay = _highlight_mat if on else null
