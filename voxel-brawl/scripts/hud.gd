@@ -5,6 +5,7 @@ extends CanvasLayer
 @onready var reload_label: Label = $ReloadLabel
 @onready var weapon_label: Label = $WeaponLabel
 @onready var stance_indicator: HudStanceIndicator = $HudStanceIndicator
+@onready var pickup_prompt: Label = $PickupPrompt
 
 var _crosshair: Control
 
@@ -29,3 +30,10 @@ func set_weapon_name(weapon_name: String) -> void:
 
 func update_stance(stance: StanceManager.Stance, available: Array[StanceManager.Stance]) -> void:
 	stance_indicator.update(stance, available)
+
+func show_pickup_prompt(weapon_name: String) -> void:
+	pickup_prompt.text = "F — pick up %s" % weapon_name
+	pickup_prompt.visible = true
+
+func hide_pickup_prompt() -> void:
+	pickup_prompt.visible = false
