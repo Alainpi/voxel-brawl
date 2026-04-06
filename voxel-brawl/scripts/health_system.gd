@@ -11,6 +11,9 @@ const WEIGHTS: Dictionary = {
 	"leg_r_upper":  25, "leg_r_fore":  15,
 	"leg_l_upper":  25, "leg_l_fore":  15,
 }
+# Death pool: any combination of segment damage summing to MAX_HP kills the entity.
+# Weights intentionally exceed MAX_HP — head (100) or torso (100) alone is lethal;
+# limbs stack toward death (both arms=80, both legs=80, both hands=40).
 const MAX_HP := 100.0
 
 signal hp_changed(current: float, maximum: float)
