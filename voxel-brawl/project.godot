@@ -20,6 +20,7 @@ config/main_scene="res://main.tscn"
 
 DamageManager="*uid://dpt6662f0ot1p"
 MCPGameBridge="res://addons/godot_mcp/game_bridge/mcp_game_bridge.gd"
+WeaponRegistry="*res://scripts/weapon_registry.gd"
 
 [editor_plugins]
 
