@@ -46,7 +46,7 @@ var _data: Dictionary = {
 func get_scene(id: StringName) -> PackedScene:
 	return _data[id]["scene"]
 
-func get_mesh(id: StringName):  # ArrayMesh or null
+func get_mesh(id: StringName) -> Variant:  # ArrayMesh or null
 	return _data[id]["mesh"]
 
 func get_display_name(id: StringName) -> String:
