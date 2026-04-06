@@ -140,6 +140,14 @@ func _input(event: InputEvent) -> void:
 		_equip_slot(SLOT_RANGED)
 	if event.is_action_pressed("drop_weapon"):
 		_drop_weapon(_current_slot)
+	if event.is_action_pressed("pickup_weapon"):
+		if _highlighted_pickup != null:
+			give_weapon(_highlighted_pickup.weapon_id)
+			_highlighted_pickup.queue_free()
+			_highlighted_pickup = null
+			var hud := get_node_or_null("/root/test_scene/hud")
+			if hud:
+				hud.hide_pickup_prompt()
 
 func _physics_process(delta: float) -> void:
 	# Camera orbit: while dragging, velocity = exact mouse input; after release, friction glides to zero
@@ -206,6 +214,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_animation(dir)
+	_update_pickup_highlight()
 
 # Returns camera ray origin and direction for the current mouse position.
 func get_camera_ray() -> Dictionary:
@@ -294,6 +303,34 @@ func _drop_weapon(slot: int) -> void:
 	_inventory[slot] = null
 	if _current_slot == slot:
 		_equip_slot(SLOT_FISTS)
+
+func _update_pickup_highlight() -> void:
+	var space := get_world_3d().direct_space_state
+	var cam_origin := camera.global_position
+	var cam_forward := -camera.global_transform.basis.z
+	var params := PhysicsRayQueryParameters3D.create(
+		cam_origin,
+		cam_origin + cam_forward * 3.0,
+		4  # layer 3 only (weapon_pickups)
+	)
+	params.collide_with_areas = false
+	var result := space.intersect_ray(params)
+	var hud := get_node_or_null("/root/test_scene/hud")
+	if result and result.collider is WeaponPickup:
+		var pickup := result.collider as WeaponPickup
+		if pickup != _highlighted_pickup:
+			if _highlighted_pickup:
+				_highlighted_pickup.highlight(false)
+			pickup.highlight(true)
+			_highlighted_pickup = pickup
+		if hud:
+			hud.show_pickup_prompt(WeaponRegistry.get_display_name(pickup.weapon_id))
+	else:
+		if _highlighted_pickup:
+			_highlighted_pickup.highlight(false)
+			_highlighted_pickup = null
+		if hud:
+			hud.hide_pickup_prompt()
 
 func _update_stance_for_weapon(weapon: Node) -> void:
 	if not weapon is WeaponBase:
