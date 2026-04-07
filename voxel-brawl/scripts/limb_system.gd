@@ -9,7 +9,6 @@ const BREAK_THRESHOLD  := 0.5   # integrity < this + BLUNT hit → BROKEN (flopp
 const DETACH_THRESHOLD := 0.0   # integrity <= this, any weapon → DETACH (severs)
 const FALLOFF          := 3.0   # proximity weight drop-off rate from attachment joint
 const BLUNT_MULTIPLIER := 2.0   # blunt weapons drain integrity twice as fast
-const DEATH_VOXEL_THRESHOLD := 0.2  # fraction of torso+head voxels remaining → death
 
 # Hierarchy: seg_name → { parent: String, children: Array[String], max_hp: float }
 # Torso segments have max_hp 0.0 — they never detach via integrity.
@@ -39,7 +38,6 @@ var _broken_anchors: Array[Dictionary] = []
 var _live_joints: Array[PinJoint3D] = []
 
 signal leg_lost(seg_name: String)
-signal died
 
 # Called by owner (Player/Dummy) after all VoxelSegments are built.
 func initialize(seg_dict: Dictionary) -> void:
@@ -76,39 +74,18 @@ func on_hit(seg: VoxelSegment, hit_pos_local: Vector3, damage: float, weapon_typ
 	if integrity <= DETACH_THRESHOLD and not seg.is_detached:
 		seg.detach()
 
-	_check_death_threshold()
-
-func _check_death_threshold() -> void:
+func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
 	if _is_dead:
 		return
-	const FATAL := ["torso_bottom", "torso_top", "head_bottom", "head_top"]
-	var total_original := 0
-	var total_current  := 0
-	for seg_name in FATAL:
-		var seg: VoxelSegment = segments.get(seg_name)
-		if seg == null:
-			continue
-		total_original += seg.total_voxel_count
-		total_current  += seg.current_voxel_count
-	if total_original > 0 and float(total_current) / float(total_original) < DEATH_VOXEL_THRESHOLD:
-		_die()
+	if seg_name in ["leg_r_upper", "leg_l_upper", "leg_r_fore", "leg_l_fore"]:
+		emit_signal("leg_lost", seg_name)
+	_spawn_detached_ragdoll(seg_name)
 
-func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
-	# Fatal segments trigger full body collapse
-	if seg_name in ["torso_bottom", "torso_top", "head_bottom", "head_top"] and not _is_dead:
-		_die()
-		return
-	if not _is_dead:
-		if seg_name in ["leg_r_upper", "leg_l_upper", "leg_r_fore", "leg_l_fore"]:
-			emit_signal("leg_lost", seg_name)
-		_spawn_detached_ragdoll(seg_name)
-
-func _die() -> void:
+func die() -> void:
 	if _is_dead:
 		return
 	_is_dead = true
 	_spawn_death_ragdoll()
-	emit_signal("died")
 	set_physics_process(false)
 
 # --- Ragdoll primitives (implemented in Tasks 5–7) ---
@@ -124,11 +101,12 @@ func _spawn_broken_ragdoll(root_seg_name: String) -> void:
 	if root_seg != null and root_seg.get_parent() is BoneAttachment3D:
 		root_bone_attach = root_seg.get_parent()
 
-	# Pre-cache joint world positions before reparenting changes the parent chain
+	# Pre-cache joint world positions before reparenting changes the parent chain.
+	# Use the BoneAttachment3D parent's global_position — that IS the bone/joint world position.
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
 		if seg != null and not seg.is_detached and not seg.is_broken:
-			joint_positions[seg_name] = _joint_world_pos(seg)
+			joint_positions[seg_name] = _attach_pos(seg)
 
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
@@ -207,7 +185,7 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 			continue
 		if seg.is_detached and seg_name != root_seg_name:
 			continue
-		joint_positions[seg_name] = _joint_world_pos(seg)
+		joint_positions[seg_name] = _attach_pos(seg)
 		# Broken segs already own an RB — reuse it, don't create a duplicate
 		if seg.is_broken and seg.get_parent() is RigidBody3D:
 			rbs[seg_name] = seg.get_parent() as RigidBody3D
@@ -310,7 +288,7 @@ func _spawn_death_ragdoll() -> void:
 	for seg_name in HIERARCHY:
 		var seg: VoxelSegment = segments.get(seg_name)
 		if seg != null and rbs.has(seg_name):
-			joint_positions[seg_name] = _joint_world_pos(seg)
+			joint_positions[seg_name] = _attach_pos(seg)
 
 	# Connect full hierarchy with PinJoint3D (gravity drives the collapse — no impulse)
 	for seg_name in HIERARCHY:
@@ -360,7 +338,17 @@ func _chain_downward(root_name: String) -> Array[String]:
 			queue.append(child)
 	return chain
 
+# World position of the joint between this segment and its parent.
+# The parent Node3D (BoneAttachment3D or RigidBody3D) global_position IS the joint position —
+# BoneAttachment3D tracks the bone exactly, and RigidBody3D origin was placed there at spawn.
+func _attach_pos(seg: VoxelSegment) -> Vector3:
+	var parent := seg.get_parent()
+	if parent is Node3D:
+		return (parent as Node3D).global_position
+	return seg.global_position
+
 # Average world position of a segment's root (attachment) voxel row.
+# Used for integrity drain proximity calculation only — not for pin joint placement.
 func _joint_world_pos(seg: VoxelSegment) -> Vector3:
 	if seg._root_voxels_cached.is_empty():
 		return seg.global_position
