@@ -37,15 +37,15 @@ func _ready() -> void:
 	_hp_bar.max_value = 100.0
 	_hp_bar.value = 100.0
 	_hp_bar.show_percentage = false
+	add_child(_hp_bar)
 	_hp_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_hp_bar.position = Vector2(16.0, -36.0)
 	_hp_bar.size = Vector2(200.0, 20.0)
-	add_child(_hp_bar)
 
 	var sil := _build_silhouette()
+	add_child(sil)
 	sil.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	sil.position = Vector2(16.0, -136.0)
-	add_child(sil)
 
 func recoil(kick: float = 16.0, recovery: float = 0.188) -> void:
 	_crosshair.recoil(kick, recovery)
