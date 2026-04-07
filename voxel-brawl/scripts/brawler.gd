@@ -40,6 +40,8 @@ var _legs_lost: int = 0
 var _player: CharacterBody3D = null
 var _attachments: Array = []
 var _fists: WeaponFists = null
+var _limb_system: LimbSystem = null
+var _health_system: HealthSystem = null
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
@@ -225,14 +227,21 @@ func _build_body() -> void:
 
 		segments[seg_name] = seg
 
-	var limb_system := LimbSystem.new()
-	limb_system.name = "LimbSystem"
-	add_child(limb_system)
+	_limb_system = LimbSystem.new()
+	_limb_system.name = "LimbSystem"
+	add_child(_limb_system)
 	for seg_name in segments:
-		segments[seg_name].set_meta("limb_system", limb_system)
-	limb_system.initialize(segments)
-	limb_system.died.connect(_die)
-	limb_system.leg_lost.connect(_on_leg_lost)
+		segments[seg_name].set_meta("limb_system", _limb_system)
+	_limb_system.initialize(segments)
+	_limb_system.leg_lost.connect(_on_leg_lost)
+
+	_health_system = HealthSystem.new()
+	_health_system.name = "HealthSystem"
+	add_child(_health_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("health_system", _health_system)
+	_health_system.initialize(segments)
+	_health_system.died.connect(_die)
 
 	if anim_player:
 		anim_player.animation_finished.connect(_on_anim_finished)
@@ -265,6 +274,8 @@ func _die() -> void:
 	_is_dead = true
 	_state = State.DEAD
 	velocity = Vector3.ZERO
+	if _limb_system != null:
+		_limb_system.die()
 	emit_signal("died")
 	for node in get_tree().get_nodes_in_group("detached_limb"):
 		node.queue_free()
@@ -275,6 +286,9 @@ func _reset() -> void:
 	var old_ls := get_node_or_null("LimbSystem")
 	if old_ls != null:
 		old_ls.queue_free()
+	var old_hs := get_node_or_null("HealthSystem")
+	if old_hs != null:
+		old_hs.queue_free()
 	for attach in _attachments:
 		if is_instance_valid(attach):
 			attach.queue_free()

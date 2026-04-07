@@ -7,6 +7,8 @@ signal died
 var segments: Dictionary = {}
 var _is_dead: bool = false
 var _attachments: Array = []
+var _limb_system: LimbSystem = null
+var _health_system: HealthSystem = null
 
 @onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
 
@@ -43,6 +45,9 @@ func _build_dummy() -> void:
 	var old_ls := get_node_or_null("LimbSystem")
 	if old_ls != null:
 		old_ls.queue_free()
+	var old_hs := get_node_or_null("HealthSystem")
+	if old_hs != null:
+		old_hs.queue_free()
 	segments.clear()
 
 	for attach in _attachments:
@@ -102,20 +107,31 @@ func _build_dummy() -> void:
 
 		segments[seg_name] = seg
 
-	var limb_system := LimbSystem.new()
-	limb_system.name = "LimbSystem"
-	add_child(limb_system)
+	_limb_system = LimbSystem.new()
+	_limb_system.name = "LimbSystem"
+	add_child(_limb_system)
 	for seg_name in segments:
-		segments[seg_name].set_meta("limb_system", limb_system)
-	limb_system.initialize(segments)
-	limb_system.died.connect(_die)
+		segments[seg_name].set_meta("limb_system", _limb_system)
+	_limb_system.initialize(segments)
+
+	_health_system = HealthSystem.new()
+	_health_system.name = "HealthSystem"
+	add_child(_health_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("health_system", _health_system)
+	_health_system.initialize(segments)
+	_health_system.died.connect(_die)
 
 	if anim_player:
 		anim_player.play("idle")
 
 
 func _die() -> void:
+	if _is_dead:
+		return
 	_is_dead = true
+	if _limb_system != null:
+		_limb_system.die()
 	emit_signal("died")
 	for node in get_tree().get_nodes_in_group("detached_limb"):
 		node.queue_free()
