@@ -48,6 +48,8 @@ var segments: Dictionary = {}
 var _is_dead: bool = false
 var _legs_lost: int = 0
 var _weapon_anchor: Node3D = null
+var _limb_system: LimbSystem = null
+var _health_system: HealthSystem = null
 
 var _current_weapon: Node = null
 
@@ -362,6 +364,11 @@ func _on_ammo_changed(current: int, max_ammo: int) -> void:
 	if _hud:
 		_hud.update_ammo(current, max_ammo)
 
+func _on_hp_changed(current: float, maximum: float) -> void:
+	if _hud:
+		_hud.update_health(current, maximum)
+		_hud.update_body_silhouette(_health_system)
+
 # Called by weapons on fire — short camera jolt. strength: 0.0–1.0 scale.
 func trigger_hit_shake(strength: float = 0.2) -> void:
 	_shake_strength = maxf(_shake_strength, strength)
@@ -449,14 +456,22 @@ func _build_voxel_body() -> void:
 			attach.add_child(anchor)
 			_weapon_anchor = anchor
 
-	var limb_system := LimbSystem.new()
-	limb_system.name = "LimbSystem"
-	add_child(limb_system)
+	_limb_system = LimbSystem.new()
+	_limb_system.name = "LimbSystem"
+	add_child(_limb_system)
 	for seg_name in segments:
-		segments[seg_name].set_meta("limb_system", limb_system)
-	limb_system.initialize(segments)
-	limb_system.leg_lost.connect(_on_leg_lost)
-	limb_system.died.connect(_die)
+		segments[seg_name].set_meta("limb_system", _limb_system)
+	_limb_system.initialize(segments)
+	_limb_system.leg_lost.connect(_on_leg_lost)
+
+	_health_system = HealthSystem.new()
+	_health_system.name = "HealthSystem"
+	add_child(_health_system)
+	for seg_name in segments:
+		segments[seg_name].set_meta("health_system", _health_system)
+	_health_system.initialize(segments)
+	_health_system.hp_changed.connect(_on_hp_changed)
+	_health_system.died.connect(_die)
 
 	if _weapon_anchor:
 		weapon_holder.reparent(_weapon_anchor, false)
@@ -493,6 +508,10 @@ func _on_leg_lost(seg_name: String) -> void:
 		_legs_lost += 1
 
 func _die() -> void:
+	if _is_dead:
+		return
 	_is_dead = true
 	_is_attacking = false
-	print("Player died! (TODO Task 6: death/respawn)")
+	if _limb_system != null:
+		_limb_system.die()
+	print("Player died! (TODO: death/respawn)")

@@ -12,3 +12,6 @@ func process_hit(segment: VoxelSegment, hit_pos_local: Vector3, radius: float, d
 		var limb_system = segment.get_meta("limb_system", null)
 		if limb_system != null:
 			limb_system.on_hit(segment, hit_pos_local, damage, weapon_type)
+		var health_system = segment.get_meta("health_system", null)
+		if health_system != null:
+			health_system.on_hit(segment)
