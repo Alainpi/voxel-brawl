@@ -165,9 +165,13 @@ func trigger_crosshair_recoil() -> void:
 # --- Body building ---
 
 func _build_body() -> void:
+	_is_dead = false
 	var old_ls := get_node_or_null("LimbSystem")
 	if old_ls != null:
 		old_ls.queue_free()
+	var old_hs := get_node_or_null("HealthSystem")
+	if old_hs != null:
+		old_hs.queue_free()
 	segments.clear()
 
 	for attach in _attachments:
