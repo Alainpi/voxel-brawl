@@ -515,6 +515,7 @@ func _die() -> void:
 		return
 	_is_dead = true
 	_is_attacking = false
+	velocity = Vector3.ZERO
 	_drop_weapon(SLOT_MELEE)
 	_drop_weapon(SLOT_RANGED)
 	$CollisionShape3D.disabled = true
@@ -553,9 +554,15 @@ func _respawn() -> void:
 
 	# 6. Tear down old body systems
 	if _limb_system != null:
+		if _limb_system.leg_lost.is_connected(_on_leg_lost):
+			_limb_system.leg_lost.disconnect(_on_leg_lost)
 		_limb_system.queue_free()
 		_limb_system = null
 	if _health_system != null:
+		if _health_system.hp_changed.is_connected(_on_hp_changed):
+			_health_system.hp_changed.disconnect(_on_hp_changed)
+		if _health_system.died.is_connected(_die):
+			_health_system.died.disconnect(_die)
 		_health_system.queue_free()
 		_health_system = null
 	for attach in _attachments:
@@ -569,11 +576,17 @@ func _respawn() -> void:
 	# 8. Reset state
 	_legs_lost = 0
 	_is_attacking = false
+	_current_slot = SLOT_FISTS
 	_weapon_anchor = null
+	segments.clear()
 	_is_dead = false
 
 	# 9. Re-create fists
-	var fists_instance := WeaponRegistry.get_scene(&"fists").instantiate() as WeaponBase
+	var fists_scene := WeaponRegistry.get_scene(&"fists")
+	if fists_scene == null:
+		push_error("_respawn: fists not found in WeaponRegistry")
+		return
+	var fists_instance := fists_scene.instantiate() as WeaponBase
 	fists_instance._player = self
 	fists_instance.weapon_id = &"fists"
 	weapon_holder.add_child(fists_instance)
