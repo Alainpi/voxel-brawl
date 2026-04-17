@@ -50,6 +50,7 @@ var _legs_lost: int = 0
 var _weapon_anchor: Node3D = null
 var _limb_system: LimbSystem = null
 var _health_system: HealthSystem = null
+var _attachments: Array = []
 
 var _current_weapon: Node = null
 
@@ -420,6 +421,7 @@ func _build_voxel_body() -> void:
 		attach.bone_idx = bone_idx
 		attach.rotation_degrees = Vector3(cfg[3], 0.0, cfg[4])
 		skeleton.add_child(attach)
+		_attachments.append(attach)
 
 
 		var seg := VoxelSegment.new()
@@ -470,6 +472,7 @@ func _build_voxel_body() -> void:
 	for seg_name in segments:
 		segments[seg_name].set_meta("health_system", _health_system)
 	_health_system.initialize(segments)
+	_health_system.limb_system = _limb_system
 	_health_system.hp_changed.connect(_on_hp_changed)
 	_health_system.died.connect(_die)
 
