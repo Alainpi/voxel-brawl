@@ -515,6 +515,70 @@ func _die() -> void:
 		return
 	_is_dead = true
 	_is_attacking = false
+	_drop_weapon(SLOT_MELEE)
+	_drop_weapon(SLOT_RANGED)
+	$CollisionShape3D.disabled = true
 	if _limb_system != null:
 		_limb_system.die()
-	print("Player died! (TODO: death/respawn)")
+	get_tree().create_timer(5.0).timeout.connect(_respawn)
+
+func _respawn() -> void:
+	# 1. Clean up ragdoll pieces
+	for node in get_tree().get_nodes_in_group("detached_limb"):
+		node.queue_free()
+
+	# 2. Teleport to a random spawn point
+	var spawn_points := get_tree().get_nodes_in_group("spawn_point")
+	if spawn_points.size() > 0:
+		var sp := spawn_points[randi() % spawn_points.size()] as Node3D
+		global_position = sp.global_position
+
+	# 3. Re-enable collision
+	$CollisionShape3D.disabled = false
+
+	# 4. Reparent weapon_holder back to camera before the body is torn down
+	weapon_holder.reparent(camera, false)
+	weapon_holder.transform = Transform3D.IDENTITY
+
+	# 5. Free all inventory weapons (including fists)
+	for i in range(_inventory.size()):
+		var w := _inventory[i]
+		if w == null:
+			continue
+		if w is WeaponRanged:
+			(w as WeaponRanged).ammo_changed.disconnect(_on_ammo_changed)
+		w.queue_free()
+		_inventory[i] = null
+	_current_weapon = null
+
+	# 6. Tear down old body systems
+	if _limb_system != null:
+		_limb_system.queue_free()
+		_limb_system = null
+	if _health_system != null:
+		_health_system.queue_free()
+		_health_system = null
+	for attach in _attachments:
+		if is_instance_valid(attach):
+			attach.queue_free()
+	_attachments.clear()
+
+	# 7. Wait one frame for queue_frees to propagate
+	await get_tree().process_frame
+
+	# 8. Reset state
+	_legs_lost = 0
+	_is_attacking = false
+	_weapon_anchor = null
+	_is_dead = false
+
+	# 9. Re-create fists
+	var fists_instance := WeaponRegistry.get_scene(&"fists").instantiate() as WeaponBase
+	fists_instance._player = self
+	fists_instance.weapon_id = &"fists"
+	weapon_holder.add_child(fists_instance)
+	_inventory[SLOT_FISTS] = fists_instance
+
+	# 10. Rebuild the voxel body and equip fists
+	_build_voxel_body()
+	_equip_slot(SLOT_FISTS)
