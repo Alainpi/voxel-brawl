@@ -594,4 +594,6 @@ func _respawn() -> void:
 
 	# 10. Rebuild the voxel body and equip fists
 	_build_voxel_body()
+	if _health_system != null:
+		_on_hp_changed(_health_system._compute_hp(), HealthSystem.MAX_HP)
 	_equip_slot(SLOT_FISTS)
