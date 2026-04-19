@@ -6,7 +6,7 @@
 **Target: Playable Prototype in 1–3 Months**
 Platforms: Windows & macOS | Players: Up to 8 | Online (Direct IP)
 
-*v3.1 — Updated with 14-bone hierarchy, hand segments, cascade detachment system, and segment state machine (BROKEN/DETACHED)*
+*v3.4 — Phase 3 gains IK-layered animation task; new Phase 3.5 Polish Pass inserted between Phase 3 and Phase 4 to tighten UI, animations, weapon damage, character health, and assorted oddities before multiplayer complicates debugging.*
 
 ---
 
@@ -299,13 +299,21 @@ Start with 8–10 weapons for the prototype, expandable later. Each weapon shoul
 
 ## 8. Power-Up Card System
 
-The card system is your game's secret weapon for replayability. Cards stack, so wild combos emerge over multiple rounds. Here's the design:
+The card system is your game's secret weapon for replayability. Cards stack, so wild combos emerge over multiple rounds. The system uses a **deckbuilder approach** inspired by Rounds: each player constructs a personal deck of buff cards before the match, and draws from that deck when choosing cards after a lost round.
+
+### Deckbuilder Meta-Loop
+
+**Pre-match:** Each player builds a deck from the full card pool (e.g. 10–20 cards per deck, with per-card copy limits). This is done in a deck builder UI before the lobby starts — you curate the buffs you *could* receive, shaping your playstyle and strategy going in.
+
+**Between rounds (for losers):** The losing player(s) draw 3 cards from the top of their personal deck and pick 1 to keep. Drawn cards that aren't picked are discarded or returned to the bottom. Cards stack and persist for the rest of the match.
+
+**Why this is better than pure random:** Pure random means getting lucky. A personal deck means every card you see is one you deliberately put there — you're always making a meaningful choice between options you understand. It also creates pre-match strategy: do you build a defensive deck, an aggro deck, a chaos deck?
 
 ### How Cards Work Per Mode
 
 | Mode | Card Delivery | Details |
 |---|---|---|
-| FFA / Team | Pick between rounds | Choose 1 of 3 random cards. Cards persist + stack all game. |
+| FFA / Team | Pick between rounds (losers only) | Draw 3 from personal deck, pick 1. Cards persist + stack all match. |
 | Wave Survival | Pick between waves | Same as above but shared card pool visible to team |
 | Battle Royale | Floor loot | Find card pickups on the map. Auto-apply on pickup. |
 
@@ -464,73 +472,81 @@ This is new — prototype the hardest system first before building anything else
 - ✅ **[NEW]** Implement fog-of-war FOV system: raycast-based vision cone (120°, 12-unit radius) with wall occlusion, world-space depth-reconstruction shader, enemy visibility toggling
 - ✅ **[NEW]** FOV shader/overlay: non-visible areas rendered as dark fog via full-screen spatial shader on D3D12/Vulkan
 
-### Phase 2: Combat + Dismemberment (Weeks 6–8)
+### Phase 2: Combat + Dismemberment (Weeks 6–8) ✅ COMPLETE
 
 **Goal: Full dismemberment system + 4–5 weapons working + player mobility + destructible player.**
 
-**Character Foundation (do first — everything else is tuned against this)**
+*Phase 2 completed 2026-04-17. Scope expanded during implementation — items originally planned for Phase 3 (full 14-segment wiring of PLAYER_SEGMENT_CONFIG, LimbSystem hierarchy with BROKEN/DETACHED integrity states, physics cascade via PinJoint3D ragdoll chain) landed here. Player mobility (crouch/prone/lean) and weapon polish (bat degradation, katana bleed/forced sever, per-weapon hit feedback) deferred to Phase 3 as originally planned.*
 
-Build the final character art now so that all destruction tuning, weapon positioning, and animation polish is based on a finalized foundation. The 14-bone hierarchy is modelled and rigged here; the code to support it is wired up in Phase 3.
+**Character Foundation (do first — everything else is tuned against this) ✅**
 
-*Flesh segments (visible, destructible):*
-- Model 14 flesh .vox segments in MagicaVoxel matching the 14-bone hierarchy: torso_bottom, torso_top, head_bottom, head_top, arm_r_upper, arm_r_fore, **hand_r**, arm_l_upper, arm_l_fore, **hand_l**, leg_r_upper, leg_r_fore, leg_l_upper, leg_l_fore
-- Export each as a .vox file — do NOT export as OBJ. Voxel data must remain raw for runtime destruction.
-- Flesh segments should have a consistent skin color palette
-- Hands (`hand_l`, `hand_r`) double as the weapon holder attachment points — losing a hand disables weapon equipping for that side (two-handed weapons require both hands intact)
+Built the final character art first so that all destruction tuning, weapon positioning, and animation polish is based on a finalized foundation. The 14-bone hierarchy is modelled, rigged, and wired in code.
 
-*Inner bone segments (hidden until flesh is carved away):*
-- Model 14 matching bone .vox segments in MagicaVoxel — one per flesh segment, same shape but smaller, painted in a distinct bone color (off-white/yellow)
-- These sit inside the flesh segments and become visible as voxels are removed
-- Export each as a .vox file
+*Flesh segments (visible, destructible):* ✅
+- ✅ 14 flesh .vox segments modelled in MagicaVoxel: torso_bottom, torso_top, head_bottom, head_top, arm_r_upper, arm_r_fore, **hand_r**, arm_l_upper, arm_l_fore, **hand_l**, leg_r_upper, leg_r_fore, leg_l_upper, leg_l_fore
+- ✅ Exported as raw .vox files (no OBJ — voxel data must remain raw for runtime destruction)
+- ✅ Consistent skin color palette applied
+- ⏭️ Hand-loss disables weapon equipping — deferred to Phase 3 (requires weapon-slot-disable signal plumbing)
 
-*Blender rig:*
-- Build a 14-bone skeleton in Blender matching the hierarchy below. Bone names must match exactly — they are used as keys in `PLAYER_SEGMENT_CONFIG`.
-- The `weapon-right` and `weapon-left` attachment bones are replaced by the `hand_r` and `hand_l` bones — weapons attach directly to the hand bones
-- Add all required animations: idle, walk, punch (melee attack), holding-right (ranged idle), holding-right-shoot (ranged fire), plus distinct animations for bat swing and katana slash
-- Export as .glb
+*Inner bone segments (hidden until flesh is carved away):* ✅ COMPLETE (2026-04-19)
+- ✅ 14 bone .vox segments authored in MagicaVoxel (off-white/yellow) and exported
+- ✅ Lazy-load system implemented: bone .vox loads when flesh drops below `BONE_REVEAL_THRESHOLD` (85%). Interior-voxel detection removed. Bone voxels overwrite surviving flesh with authored colors + `BONE_HP=3.0`; net-new voxels fill carved gaps. Bone immune to damage tinting. `flesh_voxel_count` / `_bone_voxels` / `_bone_over_flesh` track HP correctly.
 
-*Integration (Phase 2 — uses existing 6-segment code as placeholder):*
-- Replace the current Kenney `character-a.glb` placeholder with the new rig in `player.tscn`
-- Map the 6 main segments (torso_bottom, skull_top, arm_l_upper, arm_r_upper, leg_l_upper, leg_r_upper) to the existing 6-slot `PLAYER_SEGMENT_CONFIG` so the character works immediately with current code
-- Full 12-segment wiring happens in Phase 3 once hierarchy propagation is implemented
-- Verify the character animates and destructs correctly before continuing
+*Blender rig:* ✅
+- ✅ 14-bone skeleton built; bone names match `PLAYER_SEGMENT_CONFIG` keys exactly
+- ✅ Weapons attach directly to `hand_r` / `hand_l` bones (no separate weapon attachment bones)
+- ✅ Animations exported: idle, walk, punch, holding_right, holding_right_shoot, plus stance-based melee variants (`bat_low/mid/high`, `katana_low/mid/high/thrust`, `punch_low/mid/high`)
+- ⏭️ Shotgun pump animation — deferred to Phase 3
 
-**Combat & Dismemberment**
+*Integration:* ✅
+- ✅ Placeholder Kenney rig replaced with the 14-bone `player_rig.glb` in `player.tscn`, `brawler.tscn`, `dummy.tscn`
+- ✅ `PLAYER_SEGMENT_CONFIG` / `SEGMENT_CONFIG` wired to all 14 segments (scope expanded from the original "6 segments in Phase 2, remaining 8 in Phase 3" plan)
+- ✅ Character animates and destructs correctly on Player, Brawler, and Dummy
 
-- Attach runtime voxel meshes to player skeleton bones via BoneAttachment3D (replaces static Blender mesh — player becomes destructible)
-- Basic NPC enemy (Brawler) with chase AI using NavigationAgent3D
-- Implement limb HP system based on remaining voxel count per body segment
-- Limb detachment: detach body segment node, add RigidBody3D, apply force
-- Detached limbs remain destructible (keep their voxel grid)
-- **Visible weapon models:** move WeaponHolder to a BoneAttachment3D on the `weapon-right` bone so weapons appear in world space on the character; model each weapon in MagicaVoxel, export OBJ, attach as MeshInstance3D child of each weapon node
-- Add 2 melee weapons (bat, katana) + 2 ranged (revolver, shotgun)
-- Weapon pickup system (walk over to grab)
-- Health bar UI
-- Death + respawn logic
+**Combat & Dismemberment** ✅
 
-**Player Mobility & Cover Mechanics [NEW]**
+- ✅ Runtime voxel meshes attached to player skeleton via BoneAttachment3D (player is fully destructible)
+- ✅ Basic NPC Brawler with chase AI via NavigationAgent3D
+- ✅ Limb HP system driven by remaining voxel count per body segment (HealthSystem with weighted death pool, MAX_HP=100)
+- ✅ Limb detachment: segment chain reparents to RigidBody3D + PinJoint3D and tumbles as a physics ragdoll
+- ✅ Detached limbs remain destructible (keep their voxel grid, Area3D deactivates on detach)
+- ✅ **Visible weapon models:** WeaponHolder reparented at runtime to a WeaponAnchor on the `hand_r` BoneAttachment3D; each weapon modelled in MagicaVoxel, exported OBJ, and attached as MeshInstance3D
+- ✅ 2 melee weapons (bat, katana) + 2 ranged (revolver, shotgun) + fists
+- ✅ **[DONE 2026-04-06]** Weapon pickup system (walk over to grab): WeaponRegistry autoload, 3-slot inventory (fists/melee/ranged), cursor-aim highlight + F to pick up, G to drop, 1/2/3 slot keys, world-placed WeaponPickup scene. See `adding-weapons-reference.md` for how to add new weapons and place pickups in maps.
+- ✅ Health bar UI + 14-segment body silhouette with per-segment color state
+- ✅ Death + respawn logic: full-body ragdoll, 5s timer, random spawn-point selection, clean rebuild of segments and systems
 
-- **Crouch** (hold C): reduces player capsule height by ~50%, slower movement, can move behind low cover
-- **Prone** (double-tap C or hold X): fully flat, very slow crawl movement, smallest possible profile — useful for hiding behind very low obstacles
-- **Lean left / right** (Q / E while near cover): peek around corners without exposing the full body; only the leaning portion of the player's hitbox extends past cover. Leaning is a hold, not a toggle.
+**Bonus work that landed early (was originally Phase 3):**
 
-**Barrel-Origin Ray Casting [NEW]**
+- ✅ LimbSystem with full 14-bone parent-child hierarchy and `structural_integrity` float per segment
+- ✅ BROKEN state (integrity < 0.5 + BLUNT weapon → floppy ragdoll chain, segment stays attached)
+- ✅ DETACHED state (integrity ≤ 0 → cascade detach via PinJoint chain, any weapon type)
+- ✅ BLUNT_MULTIPLIER (bat-style weapons drain integrity 2× faster than sharp weapons)
+- ✅ `leg_lost` signal + speed penalty (currently uniform — Phase 3 will differentiate fore vs upper)
 
-- Each weapon model has a dedicated **Muzzle** node (Node3D at the tip of the barrel)
-- All shot rays originate from the Muzzle world position rather than player chest
-- Muzzle position naturally accounts for crouch/prone height changes and lean offset
-- Combined with the two-ray system (horizontal wall-check + camera-ray voxel targeting), this gives fully realistic shot behaviour: crouching behind cover means the barrel is below the wall top and shots are physically blocked; leaning means the barrel clears the corner only when the lean is sufficient
-- Headshots, legshots, and armshots remain possible because the camera ray still determines which exact voxel is hit once the wall-check passes
+**Barrel-Origin Ray Casting** ✅
+
+- ✅ Each ranged weapon has a dedicated **Muzzle** node (Node3D at the tip of the barrel)
+- ✅ Tracer streaks originate from Muzzle world position; hit rays originate from camera for precise aim
+- ⏭️ Muzzle-to-cover interaction (crouch/prone/lean) — deferred to Phase 3 alongside the mobility states themselves
+- ✅ Headshots, legshots, and armshots work because the camera ray determines which exact voxel is hit (DDA raycast from hit point)
 
 ### Phase 3: Skeletal Destruction (Weeks 9–11)
 
-**Goal: Wire up the 12-bone character art (built in Phase 2) fully in code for granular dismemberment.**
+**Goal: Close the remaining gaps in the 14-bone destruction system, add authored bone rendering, and build out player mobility and per-weapon identity.**
 
-The art foundation — 14 flesh segments, 14 inner bone segments, and the 14-bone Blender rig — is already complete from Phase 2. Phase 3 is entirely code work: hierarchy propagation, upgrading character scripts from 6 to 14 segments, and tuning.
+*Phase 3 was originally scoped as "upgrade 6 to 14 segments + hierarchy propagation + tuning." Most of that shipped early in Phase 2. What remains is: logical cascade cleanup, authored bone rendering, weapon-slot coupling, distinct per-weapon feel, per-bone tuning, and the deferred player mobility + cover work.*
 
-The core idea: each character has 14 individually destructible bone segments arranged in a parent-child hierarchy. Severing the connection between two bones severs everything below it in the chain — cut the elbow and the forearm flies off; cut the knee and the lower leg goes with it. No joint geometry is needed — the segment boundaries ARE the joints.
+**Context: what's already in place from Phase 2**
 
-**14-Bone Hierarchy:**
+- `PLAYER_SEGMENT_CONFIG` wired to all 14 segments (Player, Brawler, Dummy)
+- LimbSystem with full parent-child hierarchy and `structural_integrity` float per segment
+- HEALTHY / BROKEN / DETACHED state transitions driven by integrity + weapon type
+- Physical cascade: when a segment detaches, the PinJoint3D chain below it tumbles as a ragdoll
+- BLUNT_MULTIPLIER (bat-style weapons drain integrity 2× faster)
+- Interior-voxel detection (placeholder for bone reveal — being replaced this phase)
+
+**14-Bone Hierarchy (reference):**
 
 ```
 torso_bottom (pelvis) — root, anchor, never detaches independently
@@ -549,61 +565,106 @@ torso_bottom (pelvis) — root, anchor, never detaches independently
       └── leg_l_fore
 ```
 
-**Naming convention:**
-- Flesh segments (outer character, built in Phase 2): `torso_bottom`, `torso_top`, `head_bottom`, `head_top`, `arm_r_upper`, `arm_r_fore`, `hand_r`, `arm_l_upper`, `arm_l_fore`, `hand_l`, `leg_r_upper`, `leg_r_fore`, `leg_l_upper`, `leg_l_fore`
-- Inner bone segments (skeleton, built in Phase 3): `skull_bottom`, `skull_top`, `spine_bottom`, `spine_top`, `humerus_r`, `radius_r`, `metacarpal_r`, `humerus_l`, `radius_l`, `metacarpal_l`, `femur_r`, `tibia_r`, `femur_l`, `tibia_l`
+---
 
-**Cascade Detachment System:**
+**Phase 3 Work Items**
 
-The hierarchy above encodes every detachment rule. Implementation: each VoxelSegment holds a reference to its parent and a list of children. When any segment detaches, iterate its children recursively and detach them all.
+**1. Logical cascade detachment** ✅ COMPLETE (2026-04-19)
 
-Key rules:
-- **Elbow cut:** Katana hits `arm_r_fore` → `arm_r_fore` + `hand_r` detach. `arm_r_upper` stays. Only the forearm falls.
-- **Shoulder cut:** Katana hits `arm_r_upper` → `arm_r_upper` + `arm_r_fore` + `hand_r` all detach. Full arm gone.
-- **Knee cut:** Same pattern for legs — `leg_r_fore` detach only = lower leg gone. `leg_r_upper` detach = full leg gone.
-- **No joint segments needed:** The segment boundary IS the joint. `arm_r_fore` starting at the elbow means the elbow is destroyed when that segment's HP hits zero.
+When a segment enters DETACHED, `_spawn_detached_ragdoll` now calls `seg.detach()` on every descendant in the chain via a `_cascading` guard flag. Each descendant's `detached` signal fires for all listeners (HealthSystem, future slot-disable logic). `_on_segment_detached` short-circuits ragdoll rebuild and `leg_lost` while cascading — the outer call owns the single tumbling physics chunk. Verified: severing `arm_r_upper` correctly propagates `detached` to `arm_r_fore` and `hand_r`.
 
-**Segment State Machine:**
+**2. Authored bone .vox lazy loading (replaces interior-voxel detection)** ✅ COMPLETE (2026-04-19)
 
-Each segment has three states, not two:
+Bone .vox files load lazily when flesh drops below `BONE_REVEAL_THRESHOLD`. Interior-voxel detection removed. Bone voxels immune to damage tinting. HP tracked via `flesh_voxel_count` / `_bone_voxels` / `_bone_over_flesh`. Tuning constants grouped at top of `voxel_segment.gd`. See `bone-system-tuning-reference.md`.
 
-```
-HEALTHY → (break_threshold) → BROKEN → (detach_threshold) → DETACHED
-```
+**3. Weapon slot disable on hand/arm loss**
 
-- **BROKEN:** Segment stays attached. For arm segments — the weapon held in that hand is disabled. Visually: inner bone voxel color shifts (purple-grey bruise). Implemented as a `structural_integrity` float on VoxelSegment, separate from voxel HP. Drops on blunt impact, does not regenerate.
-- **DETACHED:** Standard cascade detach — node removed from skeleton, RigidBody3D applied, physics takes over.
+- Player listens for `segment_broken` and `detached` signals on `hand_r`, `hand_l`, and the arm segments above them
+- When a hand is BROKEN or DETACHED, that side's weapon slot becomes unequippable (currently-equipped weapon drops automatically to the world as a pickup)
+- Two-handed weapons require both hands intact (none in the prototype set yet, but wire the logic now)
 
-This is how blunt-force bone-breaking works without detachment: bat hits `arm_r_upper` repeatedly → `structural_integrity` drops to zero → BROKEN state → player can't equip or swing weapons in right hand, but the arm stays attached. A further hit past `detach_threshold` causes full detachment with cascade.
+**4. Per-bone integrity thresholds** ✅ COMPLETE (2026-04-19)
 
-**Code Changes Required:**
+`BREAK_THRESHOLD` and `DETACH_THRESHOLD` replaced with per-segment override dictionaries + default fallbacks. Helpers `_break_threshold(seg_name)` / `_detach_threshold(seg_name)` look up overrides with fallback. Assert in `initialize()` enforces `break > detach` for every segment. Starting values: head (break=0.70, detach=0.20), hands (break=0.80, detach=0.50), all others (break=0.50, detach=0.00). Verified against all four test cases.
 
-- Add hierarchy propagation to VoxelSegment: when a segment detaches, iterate `_children` array and call `detach()` recursively
-- Add `structural_integrity` float and BROKEN state to VoxelSegment; emit `segment_broken` signal when threshold crossed
-- Add weapon slot disable logic: player listens for `segment_broken` on `hand_r`/`hand_l`/arm segments and disables the corresponding weapon slot
-- Update `PLAYER_SEGMENT_CONFIG` in `player.gd` from 6 slots to all 14, mapping each flesh + bone .vox pair to the correct bone
-- Update Brawler and Dummy scripts from 6 segments to 14 with correct parent-child bone references
-- Tune per-bone thresholds: skull top is fragile, pelvis is very tough; hands are fragile (small target, low HP)
-- Update leg-loss crawl logic: losing a foreleg vs upper leg produces different speed penalties
-- Wire inner bone segments: load bone .vox alongside flesh .vox per segment, render at lower opacity until flesh voxel count drops below a threshold
+**5. Weapon polish (carryover from Phase 2)**
+
+These require the cleaned-up cascade + slot-disable logic above.
+
+- **Katana — bleed:** Sharp hits start a timed voxel drain on the struck segment (lose N voxels/sec for 3 seconds). Stacks per hit. Implement as a timer + drain coroutine on VoxelSegment, triggered from `WeaponKatana._apply_hit()`.
+- **Katana — forced sever:** A single clean katana hit to an arm or leg at full damage pushes the segment past its detach threshold immediately, regardless of remaining voxel count. Add a `force_detach` flag to `DamageManager.process_hit()`.
+- **Bat — bone degradation tuning:** BLUNT_MULTIPLIER is in place but needs per-segment tuning and the "limp broken limb" visual state (ragdoll connection already handles this — verify it reads correctly).
+- **Weapon-specific hit feedback:** Lookup tables keyed off `weapon_type` or `weapon_id` for: hit audio, screen shake intensity, debris particle color. Red splatter for katana, grey dust for bat, muzzle-flash-tinted for ranged.
+- **Shotgun pump animation:** Add to Blender rig and map in `play_attack_anim()`.
+
+**6. Differentiated leg-loss speed penalty**
+
+`_legs_lost` is currently a counter. Replace with seg-name-aware logic:
+
+- Losing a foreleg: moderate speed penalty (~25%)
+- Losing a full leg (upper + fore): severe penalty (~50% + crawl animation)
+- Losing both legs: crawl-only movement
+
+**7. Player mobility & cover (carryover from Phase 2)**
+
+Build in this order — simplest to hardest:
+
+- **Crouch** (hold C): reduces player collision capsule height by ~50%, slower movement, can move behind low cover. Straightforward — capsule resize + speed multiplier.
+- **Prone** (double-tap C or hold X): flat crawl, very slow movement, smallest profile. Needs animation state and transition handling.
+- **Lean left / right** (Q / E while near cover): peek around corners; only the leaning portion of the hitbox extends past cover. Trickiest piece because it must offset the character capsule without desyncing the mouse-aim projection onto the `y=0` plane.
+
+Muzzle position naturally handles cover physics because ranged shots already originate from the Muzzle Node3D — crouching drops the barrel below wall tops, leaning clears corners only when the lean is sufficient.
+
+**8. IK-layered animation polish**
+
+Animations currently play directly via `anim_player.play()` calls, which means every motion is entirely baked. Add procedural IK layers on top of the existing keyframe animations so movement reads as alive without giving up combat-timing precision.
+
+- **Keep keyframe animations for attacks and specific poses.** The stance system and hit-window timing (`hit_enable_delay`, `hit_window_duration`) are tightly coupled to baked animation lengths, and that precision matters for combat feel. Do not replace attack animations with procedural motion.
+- **Add procedural layers on top.** Foot IK for terrain (plant the feet correctly on uneven ground and stairs), procedural head-look toward nearby enemies or the aim point, torso lean based on movement direction, subtle idle breathing and sway. These layer onto the existing animations without replacing them.
+- **Use `AnimationTree` to blend between the keyframe base layer and procedural overrides.** This is the standard Godot pattern and would replace direct `anim_player.play()` calls. Migration order: set up AnimationTree alongside the current AnimationPlayer, port one state at a time, retire the direct `play()` calls only after every animation path has been reproduced in the tree.
+
+Good integration candidates once AnimationTree is in place: crouch/prone/lean blend states from task 7, the stance-weapon matrix, and the "limp broken limb" visual state from task 5.
+
+---
 
 **Why this matters for gameplay:**
 
-- Sword swings that clip the forearm sever only the forearm — half-dismemberment becomes possible
-- Head split: a slash across the skull top produces a partial decapitation while the jaw/neck remains
-- Players can still fight with severed upper arm (torso intact), but lose the arm entirely if the humerus goes
-- Bleed-through destruction: carving flesh exposes the bone beneath, which then takes more hits to destroy
-- Hand loss: losing `hand_r` prevents equipping any weapon in the right slot; losing both hands prevents two-handed weapons
+- Sword swings that clip the forearm sever only the forearm — half-dismemberment is meaningful
+- Head split: a slash across the skull top produces partial decapitation while the jaw/neck remains
+- Players can still fight with a severed upper arm, but lose everything below if the humerus goes
+- Bleed-through destruction: carving flesh exposes authored bone, which takes more hits to destroy
+- Hand loss: losing `hand_r` prevents equipping weapons in the right slot; losing both hands prevents two-handed weapons
+- Cover + leaning: ranged combat gains tactical depth — peek, shoot, return to cover
 
-**Weapon Polish (deferred from Phase 2):**
+---
 
-These weapon behaviours depend on the 14-bone system and are implemented here once the skeleton is in place:
+**Recommended build order (from the Phase 2 → 3 analysis, 2026-04-17):**
 
-- **Bat — bone degradation:** Blunt hits reduce `structural_integrity` per bone segment without clean severing. A heavily battered arm enters BROKEN state (unusable, can't hold weapon, no attack) but stays attached. When `structural_integrity` hits zero the limb hangs limp. A further hit past `detach_threshold` causes full cascade detachment.
-- **Katana — bleed:** Sharp hits start a timed voxel drain on the struck segment (e.g. lose N voxels/sec for 3 seconds). Stacks on repeated hits. Implement as a timer + drain coroutine on VoxelSegment, triggered from `WeaponKatana._apply_hit()`.
-- **Katana — forced sever:** A single clean katana hit to an arm or leg at full damage should push the segment past its detach threshold immediately, regardless of remaining voxel count. Add a `force_detach` flag to `DamageManager.process_hit()`.
-- **Attack animations per weapon:** Add distinct attack animations in Blender for bat swing, katana slash, and shotgun pump. Map them in `play_attack_anim()` once animations are exported.
-- **Weapon-specific hit feedback:** Distinct audio, screen shake intensity, and particle colour per weapon type (e.g. red splatter for katana, grey dust for bat).
+1. ✅ Logical cascade detachment + per-bone thresholds (2026-04-19)
+2. Weapon slot disable + katana bleed / forced sever (defines katana identity)
+3. ✅ Authored bone .vox lazy loading (2026-04-19)
+4. Player mobility — crouch, then prone, then lean (biggest chunk)
+5. IK animation layer — AnimationTree migration + foot IK / head-look / torso lean / idle sway
+6. Final Phase 3 polish — per-weapon hit feedback, leg-loss differential, shotgun pump anim
+
+### Phase 3.5: Polish Pass (before multiplayer)
+
+**Goal: Tighten every rough edge in the single-player experience before networking complicates debugging.**
+
+*Multiplayer amplifies every bug. A weapon damage inconsistency in single-player becomes "is this a server-client desync or a balance issue?" in multiplayer. Phase 3.5 is a deliberate pause before Phase 4 to clean up oddities while the state of the game is still fully local and reproducible.*
+
+**Target areas:**
+
+- **UI polish.** HUD readability, layout consistency across aspect ratios, crosshair behavior on fire + recovery, pickup prompt timing, stance indicator clarity, HP bar feedback, ammo/reload states, weapon name transitions on equip, any z-ordering or anchoring quirks.
+- **Animation polish.** Transitions between states (idle → run, run → attack, stance changes), animation blend weights in the new AnimationTree, tune IK layer weights from Phase 3 task 8, add hit reaction / flinch animations, smooth weapon swap animation.
+- **Weapon damage tuning.** Per-weapon balance pass against Brawler NPC and Dummy. Verify damage numbers feel right across every stance, forced sever fires consistently on clean katana hits, bleed durations land correctly and stack as intended, bat integrity drain produces the right time-to-break, shotgun pellet spread lands the expected number of hits at intended range.
+- **Character health tuning.** Revisit `MAX_HP = 100` and per-segment weights — playtest whether a torso shot should two-shot or three-shot a fresh character, whether head weights encourage or discourage headshotting, and whether bone layer adds the right "second-chance" feel against over-damaged limbs.
+- **Audio polish.** Hit audio layered per weapon and per material (flesh vs bone vs wall), footsteps, ambient loop, pickup chime, death stinger, low-HP cue if warranted.
+- **Input responsiveness.** Any "mushy" feeling inputs — weapon switch latency, attack buffering during cooldown, mouse aim precision at edges of the FOV.
+- **Edge case cleanup.** Weapon drops falling into geometry, pickup highlighting edge cases (multiple pickups overlapping the cursor ray), respawn spawn-point overlap with other players, camera clipping near walls, FOV overlay artifacts at steep angles or near destructible terrain, ragdoll interpenetration, detached limbs getting stuck on level geometry.
+- **Known oddities list.** Walk the project with playtest notes and collect everything that's been bothering you or that friends have flagged. Write it down before you start — it's easier to triage ten items on a list than ten items in your head.
+
+**Scope rule:** No new systems. No new content. Just make everything already there feel as good as it can. If a "fix" starts looking like a new feature, defer it to Phase 4 or beyond.
 
 ### Phase 4: Multiplayer (Weeks 12–14)
 
@@ -618,20 +679,33 @@ These weapon behaviours depend on the 14-bone system and are implemented here on
 - Test with friends using port forwarding or ZeroTier
 - Fix desyncs and rubberbanding (interpolation + server reconciliation)
 - **[NEW]** FOV in multiplayer: each client computes own FOV locally; teammate FOV rendered dimmed in team modes
+- **[NEW]** VoxelLoader mesh caching: cache built `ArrayMesh` per `.vox` path in a static Dictionary so all characters sharing the same segment file (e.g. all brawlers) reuse one mesh resource. Eliminates per-instance SurfaceTool rebuilds at spawn, enables GPU instancing, and is a prerequisite for any zombie-defense or high-NPC-count mode. Mesh is evicted from cache and rebuilt on first voxel hit for that instance.
 
 ### Phase 5: Game Modes + Cards (Weeks 15–17)
 
-**Goal: FFA Deathmatch fully playable with card system.**
+**Goal: FFA Deathmatch fully playable with card selection system.**
 
 - Round system: timed rounds, score tracking, round transitions
-- Card pick screen between rounds (choose 1 of 3)
+- Card pick screen between rounds: losers draw 3 from their personal deck, pick 1
+- Each player gets a default starter deck (one of each starter card, shuffled) — deck builder UI comes in Phase 6
 - Implement 10–15 starter cards with stacking logic
 - Kill feed UI, scoreboard, round announcements
 - Add 2–3 more weapons + environmental throwables
 - Basic sound effects (hits, explosions, pickups, card selection)
 - Win condition + end-of-match screen
 
-***After Phase 5, you have a playable prototype! From there, add wave survival, team mode, more cards, more maps, and eventually battle royale.***
+***After Phase 5, you have a playable prototype! From there, add wave survival, team mode, more cards, more maps, deck building, and eventually battle royale.***
+
+### Phase 6: Deck Builder + Post-Prototype Polish
+
+**Goal: Full deckbuilder meta-game + post-prototype content.**
+
+- Pre-match deck builder UI: browse full card pool, build and save a personal deck (10–20 cards, copy limits per card)
+- Deck persistence (local save per player profile)
+- Expanded card pool (aim for 30–40 total cards)
+- Wave survival mode
+- Additional maps
+- More weapons and environmental hazards
 
 ---
 

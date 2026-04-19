@@ -5,8 +5,25 @@
 class_name LimbSystem
 extends Node
 
-const BREAK_THRESHOLD  := 0.5   # integrity < this + BLUNT hit → BROKEN (floppy ragdoll)
-const DETACH_THRESHOLD := 0.0   # integrity <= this, any weapon → DETACH (severs)
+const BREAK_THRESHOLD_DEFAULT  := 0.5
+const DETACH_THRESHOLD_DEFAULT := 0.0
+
+# Per-segment overrides. Absent entries use the defaults above.
+# Break threshold: integrity < this + BLUNT hit → BROKEN (floppy ragdoll).
+# Detach threshold: integrity <= this, any weapon → DETACH (severs).
+const BREAK_THRESHOLD_OVERRIDES: Dictionary = {
+	"head_top":    0.7,   # skull cracks earlier visually — goes floppy on blunt before severing
+	"head_bottom": 0.7,
+	"hand_r":      0.8,   # hands break fast (fragile, high-priority-to-lose target)
+	"hand_l":      0.8,
+}
+const DETACH_THRESHOLD_OVERRIDES: Dictionary = {
+	"head_top":    0.2,   # head is harder to outright sever than a limb
+	"head_bottom": 0.2,
+	"hand_r":      0.5,   # hands detach easily
+	"hand_l":      0.5,
+	# arms/legs fall through to 0.0 — "limb must be fully spent to come off"
+}
 const FALLOFF          := 3.0   # proximity weight drop-off rate from attachment joint
 const BLUNT_MULTIPLIER := 2.0   # blunt weapons drain integrity twice as fast
 
@@ -32,6 +49,7 @@ const HIERARCHY: Dictionary = {
 var segments: Dictionary = {}   # seg_name (String) → VoxelSegment
 var _integrity: Dictionary = {} # seg_name → float (1.0 = intact)
 var _is_dead: bool = false
+var _cascading: bool = false    # true while _spawn_detached_ragdoll is iterating the chain
 
 # Each entry: { "anchor": StaticBody3D, "bone_attach": Node3D, "root_seg": String }
 var _broken_anchors: Array[Dictionary] = []
@@ -45,6 +63,8 @@ func initialize(seg_dict: Dictionary) -> void:
 	_integrity.clear()
 	for seg_name in HIERARCHY:
 		_integrity[seg_name] = 1.0
+		assert(_break_threshold(seg_name) > _detach_threshold(seg_name),
+			"Break threshold must be > detach threshold for %s" % seg_name)
 	for seg_name in segments:
 		var seg: VoxelSegment = segments[seg_name]
 		seg.detached.connect(_on_segment_detached.bind(seg_name))
@@ -66,16 +86,20 @@ func on_hit(seg: VoxelSegment, hit_pos_local: Vector3, damage: float, weapon_typ
 	var integrity: float = _integrity[seg_name]
 
 	# BROKEN: floppy ragdoll while still attached (blunt only, not already broken)
-	if weapon_type == WeaponBase.WeaponType.BLUNT and integrity < BREAK_THRESHOLD:
+	if weapon_type == WeaponBase.WeaponType.BLUNT and integrity < _break_threshold(seg_name):
 		if not seg.is_broken:
 			_spawn_broken_ragdoll(seg_name)
 
 	# DETACH: severs the segment (any weapon)
-	if integrity <= DETACH_THRESHOLD and not seg.is_detached:
+	if integrity <= _detach_threshold(seg_name) and not seg.is_detached:
 		seg.detach()
 
 func _on_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
 	if _is_dead:
+		return
+	if _cascading:
+		# Descendant cascade — detached signal still fires for listeners, but we skip
+		# ragdoll rebuild (outer _spawn_detached_ragdoll owns it) and leg_lost (root-only).
 		return
 	if seg_name in ["leg_r_upper", "leg_l_upper", "leg_r_fore", "leg_l_fore"]:
 		emit_signal("leg_lost", seg_name)
@@ -190,18 +214,17 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 		if seg.is_broken and seg.get_parent() is RigidBody3D:
 			rbs[seg_name] = seg.get_parent() as RigidBody3D
 
+	_cascading = true
 	for seg_name in chain:
 		var seg: VoxelSegment = segments.get(seg_name)
 		if seg == null:
 			continue
 		if seg.is_detached and seg_name != root_seg_name:
 			continue
-		# Mark descendants as detached so connectivity checks don't re-fire
+		# Mark descendants as detached via the official path so the detached signal fires.
+		# Root is already detached by the time we get here (on_hit called seg.detach()).
 		if seg_name != root_seg_name:
-			seg.is_detached = true
-			for child in seg.get_children():
-				if child is Area3D:
-					(child as Area3D).collision_layer = 0
+			seg.detach()  # emits detached; _on_segment_detached skips ragdoll rebuild due to _cascading
 		# Already-broken segments own existing RBs — free their anchor and skip new RB
 		if seg.is_broken:
 			for i in range(_broken_anchors.size() - 1, -1, -1):
@@ -221,6 +244,7 @@ func _spawn_detached_ragdoll(root_seg_name: String) -> void:
 		rb.add_child(_make_box_col(seg))
 		seg.reparent(rb, true)
 		rbs[seg_name] = rb
+	_cascading = false
 
 	if rbs.is_empty():
 		return
@@ -373,6 +397,15 @@ func _make_pin_joint(world_pos: Vector3, body_a: PhysicsBody3D, body_b: PhysicsB
 	joint.node_b = joint.get_path_to(body_b)
 	_live_joints.append(joint)
 	return joint
+
+func get_integrity(seg_name: String) -> float:
+	return clampf(_integrity.get(seg_name, 1.0), 0.0, 1.0)
+
+func _break_threshold(seg_name: String) -> float:
+	return BREAK_THRESHOLD_OVERRIDES.get(seg_name, BREAK_THRESHOLD_DEFAULT)
+
+func _detach_threshold(seg_name: String) -> float:
+	return DETACH_THRESHOLD_OVERRIDES.get(seg_name, DETACH_THRESHOLD_DEFAULT)
 
 func _get_mass(seg_name: String) -> float:
 	if seg_name in ["torso_bottom", "torso_top"]:

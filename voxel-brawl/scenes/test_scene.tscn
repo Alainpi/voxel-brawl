@@ -241,6 +241,10 @@ weapon_id = &"bat"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -2)
 weapon_id = &"revolver"
 
+[node name="WeaponPickupKatana" parent="." unique_id=583741029 instance=ExtResource("18_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.1, 2)
+weapon_id = &"katana"
+
 [node name="SpawnPoint1" type="Marker3D" parent="." groups=["spawn_point"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 5)
 
