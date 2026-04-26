@@ -1,6 +1,6 @@
 # Voxel Brawl — Architecture Reference
 
-> Current as of: 2026-04-19  
+> Current as of: 2026-04-26  
 > Engine: Godot 4.6.1-stable  
 > Purpose: Guide future feature work to stay compatible with existing systems.  
 > **Does not describe planned or future states.**
@@ -351,6 +351,7 @@ Added as a child node of any damageable character at runtime.
 - Triggers BROKEN (floppy ragdoll, still attached) and DETACHED (severed) state transitions
 - Owns and manages all RigidBody3D and PinJoint3D ragdoll nodes
 - Emits `leg_lost(seg_name)` when a leg segment detaches
+- Emits `segment_broken(seg_name)` once per segment that newly enters BROKEN state (including cascade descendants)
 
 ### Constants
 
@@ -404,7 +405,9 @@ where `dist_to_joint` is the distance from the hit position to the average of th
 ### State transitions
 
 - **BROKEN:** `integrity < BREAK_THRESHOLD` AND weapon is BLUNT AND segment not already broken  
-  → `_spawn_broken_ragdoll(seg_name)`: segment chain reparented to RigidBody3D nodes connected by PinJoint3D; a StaticBody3D "shoulder anchor" follows the BoneAttachment3D each tick to keep the chain attached while still animated.
+  → `_spawn_broken_ragdoll(seg_name)`: the segment AND every descendant in `_chain_downward(seg_name)` are reparented to fresh RigidBody3D nodes connected by PinJoint3D; each gets `is_broken = true`. A StaticBody3D "shoulder anchor" is created at the root segment's BoneAttachment3D position and pinned to the root RB; `_physics_process` updates the anchor's `global_position` from the BoneAttachment3D each tick so the rigid chain dangles from the still-animated parent bone.  
+  **Cascade:** `_spawn_broken_ragdoll(root_seg_name)` walks `_chain_downward(root_seg_name)` and breaks the root + every descendant in one pass. Breaking a forearm therefore also breaks the hand below it (both go floppy from the elbow); the upper arm above stays cleanly animated. The cascade is downward-only.  
+  **Signal:** `segment_broken(seg_name: String)` fires once per segment that newly transitions to BROKEN, immediately after `seg.is_broken = true` is set in the chain loop. Segments already broken or detached are skipped (the existing `seg.is_detached or seg.is_broken` guard). Listeners do not need to re-implement the cascade rule — they receive one emission per affected segment.
 
 - **DETACHED:** `integrity <= _detach_threshold(seg_name)` (any weapon type)  
   → `seg.detach()` → `_spawn_detached_ragdoll(seg_name)`: removes shoulder anchor, applies outward impulse; the entire chain below the root tumbles freely.  
@@ -561,14 +564,24 @@ Per-weapon data:
 | `pickup_rotation` | Vector3 | Applied to pickup mesh node |
 | `pickup_scale` | float | Applied to pickup mesh node |
 
+### WeaponBase hand-side fields
+
+Two fields on `WeaponBase` gate pickup eligibility:
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `held_side` | `StringName` | `&"r"` | Which hand mounts this weapon. All current prototype weapons use `&"r"`. |
+| `requires_both_hands` | `bool` | `false` | If true, both hands must be intact. No prototype weapon sets this yet. |
+
 ### `give_weapon(id: StringName)` flow
 
 1. Look up slot from WeaponRegistry
-2. Drop existing weapon in that slot if occupied (`_drop_weapon`)
-3. Instance scene, set `_player`, `weapon_id`
-4. Add to WeaponHolder; hide and disable physics until equipped
-5. If ranged: connect `ammo_changed` signal
-6. Call `_equip_slot(slot)`
+2. **Gate:** if slot ≠ SLOT_FISTS, probe `held_side` / `requires_both_hands` from a temporary (un-parented) instance. If `_hand_usable[held_side] == false`, or if `requires_both_hands` and either hand is disabled, refuse the pickup (weapon stays in world).
+3. Drop existing weapon in that slot if occupied (`_drop_weapon`)
+4. Instance scene, set `_player`, `weapon_id`
+5. Add to WeaponHolder; hide and disable physics until equipped
+6. If ranged: connect `ammo_changed` signal
+7. Call `_equip_slot(slot)`
 
 ### WeaponPickup scene
 
@@ -776,7 +789,9 @@ When a segment detaches, its Area3D `collision_layer` is set to 0 so it stops re
 | `ammo_changed(cur, max)` | WeaponRanged | `_on_ammo_changed` | HUD.update_ammo |
 | `hp_changed(cur, max)` | HealthSystem | `_on_hp_changed` | HUD.update_health + update_body_silhouette |
 | `died` | HealthSystem | `_die()` | sets `_is_dead`, drops weapons, starts ragdoll + 5s timer |
-| `leg_lost(seg_name)` | LimbSystem | `_on_leg_lost` | increments `_legs_lost` → speed penalty |
+| `leg_lost(seg_name)` | LimbSystem | `_on_leg_lost` | records seg in `_lost_legs` → speed multiplier |
+| `segment_broken(seg_name)` | LimbSystem | `_on_segment_broken` | disables weapon slot for that arm side; drops held weapon |
+| `detached(seg)` | VoxelSegment (arm/hand segs) | `_on_arm_segment_detached` | same effect as segment_broken — idempotent |
 | `timeout` | SceneTreeTimer (5s) | `_respawn()` | rebuilds body, teleports to spawn point |
 
 ### Brawler signals (emitted)
@@ -791,12 +806,20 @@ When a segment detaches, its Area3D `collision_layer` is set to 0 so it stops re
 |---|---|---|
 | `died` | `_die()` called | main.gd (debug print) |
 
+### LimbSystem signals (emitted)
+
+| Signal | When | Receiver |
+|---|---|---|
+| `leg_lost(seg_name)` | A leg segment detaches (root only — cascade descendants suppressed by `_cascading` guard) | Player / Brawler `_on_leg_lost` |
+| `segment_broken(seg_name)` | Each segment in `_spawn_broken_ragdoll`'s chain loop, after `is_broken = true`. Fires once per newly-broken segment — one call for the root, one per cascade descendant. | Player `_on_segment_broken` |
+
 ### VoxelSegment → systems
 
 | Signal | Connected to | On every segment |
 |---|---|---|
 | `detached(seg)` | `LimbSystem._on_segment_detached` | Yes, bound with seg_name |
 | `detached(seg)` | `HealthSystem._on_segment_detached` | Yes, bound with seg_name |
+| `detached(seg)` | `Player._on_arm_segment_detached` | Arm/hand segs only (`hand_r/l`, `arm_r/l_fore`, `arm_r/l_upper`), bound with seg_name. Fires for each segment in a cascade; handler is idempotent. VoxelSegment nodes are freed on respawn — connections auto-clean. |
 
 ### Full damage chain
 
@@ -862,7 +885,7 @@ Four `Marker3D` nodes in `test_scene.tscn`, each in the `"spawn_point"` group:
 6. Disconnect and free `LimbSystem` and `HealthSystem`. Explicitly disconnect `leg_lost`, `hp_changed`, and `died` signals before `queue_free` to prevent double-respawn on a second death.
 7. Free all `_attachments` (BoneAttachment3D nodes) and clear the array.
 8. `await get_tree().process_frame` — lets `queue_free` propagate before rebuilding.
-9. Reset state: `_legs_lost = 0`, `_is_attacking = false`, `_current_slot = SLOT_FISTS`, `_weapon_anchor = null`, `segments.clear()`, `_is_dead = false`.
+9. Reset state: `_lost_legs.clear()`, `_hand_usable = {"r": true, "l": true}`, `_is_attacking = false`, `_current_slot = SLOT_FISTS`, `_weapon_anchor = null`, `segments.clear()`, `_is_dead = false`.
 10. Re-create fists: instantiate from `WeaponRegistry`, set `_player` and `weapon_id`, add to `weapon_holder`, store in `_inventory[SLOT_FISTS]`.
 11. Call `_build_voxel_body()` — rebuilds all 14 segments, wires new `LimbSystem` and `HealthSystem`, reparents `weapon_holder` to new `_weapon_anchor`.
 12. Manually call `_on_hp_changed(_health_system._compute_hp(), HealthSystem.MAX_HP)` to force-refresh the HUD. This is necessary because `HealthSystem.initialize()` fires `hp_changed` during `_build_voxel_body()` before the signal is re-connected, so the HUD misses it.
@@ -875,14 +898,18 @@ Before calling `queue_free` on `LimbSystem` or `HealthSystem`, disconnect signal
 ```gdscript
 if _limb_system.leg_lost.is_connected(_on_leg_lost):
     _limb_system.leg_lost.disconnect(_on_leg_lost)
+if _limb_system.segment_broken.is_connected(_on_segment_broken):
+    _limb_system.segment_broken.disconnect(_on_segment_broken)
 if _health_system.hp_changed.is_connected(_on_hp_changed):
     _health_system.hp_changed.disconnect(_on_hp_changed)
 if _health_system.died.is_connected(_die):
     _health_system.died.disconnect(_die)
 ```
 
+VoxelSegment `detached` connections to `Player._on_arm_segment_detached` do not need explicit disconnects — the VoxelSegment nodes are freed when `_attachments` are cleared, and Godot auto-disconnects signals from freed nodes.
+
 Without this, the `died` signal fires again from the freed node on the second death, triggering a second `_respawn()` call.
 
 ---
 
-*Document complete as of 2026-04-19.*
+*Document complete as of 2026-04-26.*

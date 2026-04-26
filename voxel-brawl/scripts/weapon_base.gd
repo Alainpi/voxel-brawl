@@ -10,6 +10,11 @@ var weapon_id: StringName = &""  # set by Player.give_weapon() after instantiati
 enum WeaponType { BLUNT, SHARP, RANGED }
 var weapon_type: WeaponType = WeaponType.BLUNT
 
+# Which hand this weapon mounts on. Default "r" — all current prototype weapons use right hand.
+var held_side: StringName = &"r"
+# Two-handed weapons require both hands intact. None in the prototype set, but gated in give_weapon.
+var requires_both_hands: bool = false
+
 func _ready() -> void:
 	_configure()
 	# _player must be set externally via weapon._player = self after instantiation.

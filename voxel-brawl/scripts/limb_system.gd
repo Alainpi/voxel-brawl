@@ -56,6 +56,7 @@ var _broken_anchors: Array[Dictionary] = []
 var _live_joints: Array[PinJoint3D] = []
 
 signal leg_lost(seg_name: String)
+signal segment_broken(seg_name: String)
 
 # Called by owner (Player/Dummy) after all VoxelSegments are built.
 func initialize(seg_dict: Dictionary) -> void:
@@ -146,6 +147,7 @@ func _spawn_broken_ragdoll(root_seg_name: String) -> void:
 		rb.add_child(_make_box_col(seg))
 		seg.reparent(rb, true)
 		seg.is_broken = true
+		emit_signal("segment_broken", seg_name)
 		rbs[seg_name] = rb
 
 	if rbs.is_empty():

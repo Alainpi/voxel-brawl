@@ -23,30 +23,32 @@ const CRAWL_SPEED := 1.2
 @onready var weapon_holder: Node3D = $CameraPivot/Camera3D/WeaponHolder
 @onready var stance_manager: StanceManager = $StanceManager
 
-# [vox_path, bone_name, position_offset, attach_rot_x, attach_rot_z, scale, root_axis, seg_rot_x, seg_rot_y]
+# [vox_path, bone_name, position_offset, attach_rot_x, attach_rot_z, scale, root_axis, seg_rot_x, seg_rot_y, bone_vox_path]
 # attach_rot: corrects MagicaVoxel coordinate system on the BoneAttachment3D
 # seg_rot: additional visual correction on the VoxelSegment itself — does not affect animations or weapon holder
+# bone_vox_path: authored bone .vox loaded lazily when flesh drops below BONE_REVEAL_THRESHOLD (Option A)
 # Offsets are relative to each bone origin
 const PLAYER_SEGMENT_CONFIG := {
-	"torso_bottom": ["res://assets/voxels/torso_bottom.vox", "torso_bottom", Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i.ZERO,    0,   0],
-	"torso_top":    ["res://assets/voxels/torso_top.vox",    "torso_top",    Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,-1,0), 0,   0],
-	"head_bottom":  ["res://assets/voxels/head_bottom.vox",  "head_bottom",  Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0],
-	"head_top":     ["res://assets/voxels/head_top.vox",     "head_top",     Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0],
-	"arm_r_upper":  ["res://assets/voxels/arm_r_upper.vox",  "arm_r_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0],
-	"arm_r_fore":   ["res://assets/voxels/arm_r_fore.vox",   "arm_r_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
-	"hand_r":       ["res://assets/voxels/hand_r.vox",       "hand_r",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180],
-	"arm_l_upper":  ["res://assets/voxels/arm_l_upper.vox",  "arm_l_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0],
-	"arm_l_fore":   ["res://assets/voxels/arm_l_fore.vox",   "arm_l_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
-	"hand_l":       ["res://assets/voxels/hand_l.vox",       "hand_l",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180],
-	"leg_r_upper":  ["res://assets/voxels/leg_r_upper.vox",  "leg_r_upper",  Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
-	"leg_r_fore":   ["res://assets/voxels/leg_r_fore.vox",   "leg_r_fore",   Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
-	"leg_l_upper":  ["res://assets/voxels/leg_l_upper.vox",  "leg_l_upper",  Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
-	"leg_l_fore":   ["res://assets/voxels/leg_l_fore.vox",   "leg_l_fore",   Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0],
+	"torso_bottom": ["res://assets/voxels/torso_bottom.vox", "torso_bottom", Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i.ZERO,    0,   0,   "res://assets/voxels/spine_bottom.vox"],
+	"torso_top":    ["res://assets/voxels/torso_top.vox",    "torso_top",    Vector3(-1.0,  0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,-1,0), 0,   0,   "res://assets/voxels/spine_top.vox"],
+	"head_bottom":  ["res://assets/voxels/head_bottom.vox",  "head_bottom",  Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0,   "res://assets/voxels/skull_bottom.vox"],
+	"head_top":     ["res://assets/voxels/head_top.vox",     "head_top",     Vector3(-0.9,  0.0,  0.8), -90, 0, Vector3(1,1,-1), Vector3i(0,-1,0), 0,   0,   "res://assets/voxels/skull_top.vox"],
+	"arm_r_upper":  ["res://assets/voxels/arm_r_upper.vox",  "arm_r_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0,   "res://assets/voxels/humerus_r.vox"],
+	"arm_r_fore":   ["res://assets/voxels/arm_r_fore.vox",   "arm_r_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/radius_r.vox"],
+	"hand_r":       ["res://assets/voxels/hand_r.vox",       "hand_r",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180, "res://assets/voxels/metacarpal_r.vox"],
+	"arm_l_upper":  ["res://assets/voxels/arm_l_upper.vox",  "arm_l_upper",  Vector3(-0.44, 1.65, 0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 0,   "res://assets/voxels/humerus_l.vox"],
+	"arm_l_fore":   ["res://assets/voxels/arm_l_fore.vox",   "arm_l_fore",   Vector3(-0.44, 0.0, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/radius_l.vox"],
+	"hand_l":       ["res://assets/voxels/hand_l.vox",       "hand_l",       Vector3( 0.2,  0.7, -0.4), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  180, 180, "res://assets/voxels/metacarpal_l.vox"],
+	"leg_r_upper":  ["res://assets/voxels/leg_r_upper.vox",  "leg_r_upper",  Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/femur_r.vox"],
+	"leg_r_fore":   ["res://assets/voxels/leg_r_fore.vox",   "leg_r_fore",   Vector3(-0.35, 0.0, -0.5), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/tibia_r.vox"],
+	"leg_l_upper":  ["res://assets/voxels/leg_l_upper.vox",  "leg_l_upper",  Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/femur_l.vox"],
+	"leg_l_fore":   ["res://assets/voxels/leg_l_fore.vox",   "leg_l_fore",   Vector3(-0.45, 0.0, -0.3), -90, 0, Vector3(1,1,1),  Vector3i(0,1,0),  0,   0,   "res://assets/voxels/tibia_l.vox"],
 }
 
 var segments: Dictionary = {}
 var _is_dead: bool = false
-var _legs_lost: int = 0
+var _lost_legs: Dictionary = {}
+var _hand_usable: Dictionary = {"r": true, "l": true}
 var _weapon_anchor: Node3D = null
 var _limb_system: LimbSystem = null
 var _health_system: HealthSystem = null
@@ -184,8 +186,8 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
-	# Jump — disabled when crawling
-	if Input.is_action_just_pressed("jump") and is_on_floor() and _legs_lost == 0:
+	# Jump — disabled when any leg is lost
+	if Input.is_action_just_pressed("jump") and is_on_floor() and _lost_legs.is_empty():
 		velocity.y = JUMP_FORCE
 
 	# Movement relative to camera yaw so WASD always matches screen orientation
@@ -199,13 +201,12 @@ func _physics_process(delta: float) -> void:
 	dir.y = 0.0
 	dir = dir.normalized()
 
+	var leg_mult := _leg_loss_speed_multiplier()
 	var speed: float
-	if _legs_lost >= 2:
+	if leg_mult < 0.0:
 		speed = CRAWL_SPEED
-	elif _legs_lost == 1:
-		speed = SPEED * 0.5
 	else:
-		speed = SPEED * (SPRINT_MULT if Input.is_action_pressed("sprint") else 1.0)
+		speed = SPEED * leg_mult * (SPRINT_MULT if Input.is_action_pressed("sprint") else 1.0)
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 
@@ -281,6 +282,18 @@ func give_weapon(id: StringName) -> void:
 		push_error("give_weapon: unknown weapon id: " + id)
 		return
 	var slot := WeaponRegistry.get_slot(id)
+	# Gate on disabled hand. WeaponBase defaults held_side=&"r", requires_both_hands=false;
+	# _configure() runs in _ready() (tree entry), so probing without adding to tree reads defaults —
+	# correct for all current weapons. Update WeaponRegistry when a left-hand weapon is added.
+	if slot != SLOT_FISTS:
+		var probe := WeaponRegistry.get_scene(id).instantiate() as WeaponBase
+		var side: StringName = probe.held_side
+		var two_handed: bool = probe.requires_both_hands
+		probe.free()
+		if not _hand_usable.get(side, true):
+			return
+		if two_handed and (not _hand_usable.get(&"r", true) or not _hand_usable.get(&"l", true)):
+			return
 	if _inventory[slot] != null:
 		_drop_weapon(slot)
 	var instance := WeaponRegistry.get_scene(id).instantiate() as WeaponBase
@@ -430,6 +443,7 @@ func _build_voxel_body() -> void:
 		seg.position = cfg[2]
 		seg.scale = cfg[5]
 		seg.rotation_degrees = Vector3(cfg[7], cfg[8], 0.0)
+		seg._bone_vox_path = cfg[9]
 		attach.add_child(seg)
 		seg.load_from_vox(vox_path)
 
@@ -465,6 +479,13 @@ func _build_voxel_body() -> void:
 		segments[seg_name].set_meta("limb_system", _limb_system)
 	_limb_system.initialize(segments)
 	_limb_system.leg_lost.connect(_on_leg_lost)
+	_limb_system.segment_broken.connect(_on_segment_broken)
+
+	# Connect arm/hand detached signals for slot-disable logic.
+	# Cascade fires detached for each descendant, so handler must be idempotent.
+	for arm_seg_name in ["hand_r", "hand_l", "arm_r_fore", "arm_l_fore", "arm_r_upper", "arm_l_upper"]:
+		if segments.has(arm_seg_name):
+			segments[arm_seg_name].detached.connect(_on_arm_segment_detached.bind(arm_seg_name))
 
 	_health_system = HealthSystem.new()
 	_health_system.name = "HealthSystem"
@@ -505,10 +526,53 @@ func take_damage(amount: float) -> void:
 		seg.take_hit(Vector3.ZERO, 2.0, amount)
 
 func _on_leg_lost(seg_name: String) -> void:
-	if seg_name in ["leg_r_upper", "leg_l_upper"]:
-		_legs_lost += 2
-	elif seg_name in ["leg_r_fore", "leg_l_fore"]:
-		_legs_lost += 1
+	_lost_legs[seg_name] = true
+
+func _leg_loss_speed_multiplier() -> float:
+	var r_upper := _lost_legs.has("leg_r_upper")
+	var l_upper := _lost_legs.has("leg_l_upper")
+	var r_fore  := _lost_legs.has("leg_r_fore")
+	var l_fore  := _lost_legs.has("leg_l_fore")
+	# Crawl: both uppers, one upper + opposite fore, or both forelegs
+	if (r_upper and l_upper) or (r_upper and l_fore) or (l_upper and r_fore) or (r_fore and l_fore):
+		return -1.0
+	# Full leg: one upper (cascades its fore, but leg_lost only fires for the upper)
+	if r_upper or l_upper:
+		return 0.5
+	# Foreleg only: one fore without that side's upper
+	if r_fore or l_fore:
+		return 0.75
+	return 1.0
+
+func _seg_name_to_side(seg_name: String) -> String:
+	match seg_name:
+		"hand_r", "arm_r_fore", "arm_r_upper": return "r"
+		"hand_l", "arm_l_fore", "arm_l_upper": return "l"
+		_: return ""
+
+func _on_segment_broken(seg_name: String) -> void:
+	_disable_arm_side(seg_name)
+
+func _on_arm_segment_detached(_seg: VoxelSegment, seg_name: String) -> void:
+	_disable_arm_side(seg_name)
+
+func _disable_arm_side(seg_name: String) -> void:
+	var side := _seg_name_to_side(seg_name)
+	if side.is_empty():
+		return
+	if not _hand_usable.get(side, true):
+		return  # already disabled — idempotent
+	_hand_usable[side] = false
+	# Drop weapons held on this side, or two-handed weapons when the other side is also disabled.
+	var other_side: StringName = &"l" if side == "r" else &"r"
+	for slot in [SLOT_MELEE, SLOT_RANGED]:
+		var w: WeaponBase = _inventory[slot]
+		if w == null:
+			continue
+		var should_drop := (w.held_side == side) or \
+			(w.requires_both_hands and not _hand_usable.get(other_side, true))
+		if should_drop:
+			_drop_weapon(slot)  # also switches to SLOT_FISTS if _current_slot == slot
 
 func _die() -> void:
 	if _is_dead:
@@ -556,6 +620,8 @@ func _respawn() -> void:
 	if _limb_system != null:
 		if _limb_system.leg_lost.is_connected(_on_leg_lost):
 			_limb_system.leg_lost.disconnect(_on_leg_lost)
+		if _limb_system.segment_broken.is_connected(_on_segment_broken):
+			_limb_system.segment_broken.disconnect(_on_segment_broken)
 		_limb_system.queue_free()
 		_limb_system = null
 	if _health_system != null:
@@ -574,7 +640,8 @@ func _respawn() -> void:
 	await get_tree().process_frame
 
 	# 8. Reset state
-	_legs_lost = 0
+	_lost_legs.clear()
+	_hand_usable = {"r": true, "l": true}
 	_is_attacking = false
 	_current_slot = SLOT_FISTS
 	_weapon_anchor = null
