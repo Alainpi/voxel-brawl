@@ -20,6 +20,7 @@ const CRAWL_SPEED := 1.2
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
+@onready var anim_tree: AnimationTree = $PlayerModel.find_child("AnimationTree", true, false) as AnimationTree
 @onready var weapon_holder: Node3D = $CameraPivot/Camera3D/WeaponHolder
 @onready var stance_manager: StanceManager = $StanceManager
 
@@ -69,6 +70,13 @@ var _pickup_scene: PackedScene = preload("res://scenes/weapons/weapon_pickup.tsc
 
 var _is_attacking: bool = false
 var _cam_rotating := false
+
+# IK nodes — created in _build_voxel_body(), cleared on respawn
+var _foot_ik_r: TwoBoneIK3D = null
+var _foot_ik_l: TwoBoneIK3D = null
+var _foot_target_r: Marker3D = null
+var _foot_target_l: Marker3D = null
+var _look_at_target: Marker3D = null  # child of Camera3D, set in _ready()
 var _cam_velocity := 0.0   # rad/s — persists after release for slide
 var _cam_drag_x := 0.0     # pixel accumulator between physics ticks
 var _shake_strength := 0.0
@@ -122,6 +130,26 @@ func _ready() -> void:
 	stance_manager.stance_changed.connect(_on_stance_changed)
 	anim_player.animation_finished.connect(_on_anim_finished)
 	_hud = get_node_or_null("/root/test_scene/hud")
+
+	# Build AnimationTree (locomotion + breathe additive)
+	if anim_tree and anim_player:
+		AnimTreeSetup.build_and_activate(anim_tree, anim_player)
+
+	# Look-at target: Marker3D 5 m in front of camera, world-tracked by LookAtModifier3D
+	var lat := Marker3D.new()
+	lat.name = "LookAtTarget"
+	lat.position = Vector3(0.0, 0.0, -5.0)
+	camera.add_child(lat)
+	_look_at_target = lat
+
+	# Foot IK target markers — live in world space, updated via raycast
+	_foot_target_r = Marker3D.new()
+	_foot_target_r.name = "FootTargetR"
+	add_child(_foot_target_r)
+	_foot_target_l = Marker3D.new()
+	_foot_target_l.name = "FootTargetL"
+	add_child(_foot_target_l)
+
 	call_deferred("_build_voxel_body")
 
 func _input(event: InputEvent) -> void:
@@ -219,6 +247,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_animation(dir)
+	_update_foot_ik(delta)
 
 func _process(_delta: float) -> void:
 	if not is_multiplayer_authority() or _is_dead:
@@ -254,11 +283,67 @@ func _update_animation(_dir: Vector3) -> void:
 	elif _current_weapon is WeaponKatana:
 		anim_player.play("katana-hold")
 	else:
-		var speed_h := Vector2(velocity.x, velocity.z).length()
-		if speed_h > 0.1:
-			anim_player.play("walk")
-		else:
-			anim_player.play("idle")
+		# Locomotion driven by AnimationTree blend position
+		if anim_tree and anim_tree.active:
+			anim_tree.set("parameters/locomotion/blend_position", _get_loco_blend())
+
+func _get_loco_blend() -> Vector2:
+	var flat_vel := Vector2(velocity.x, velocity.z)
+	if flat_vel.length_squared() < 0.01:
+		return Vector2.ZERO
+	# Project velocity onto character's own facing axes so walk/strafe
+	# animations reflect what the character is actually doing relative to where it faces.
+	var char_fwd := Vector2(-global_transform.basis.z.x, -global_transform.basis.z.z)
+	var char_right := Vector2(global_transform.basis.x.x, global_transform.basis.x.z)
+	if char_fwd.length_squared() < 0.001:
+		return Vector2.ZERO
+	var fwd_proj := flat_vel.dot(char_fwd.normalized())
+	var right_proj := flat_vel.dot(char_right.normalized())
+	# Y axis: 0.5 = walk, 1.0 = run (sprint), -1.0 = walk_back
+	var blend_y: float
+	if fwd_proj > 0.3:
+		blend_y = 1.0 if Input.is_action_pressed("sprint") else 0.5
+	elif fwd_proj < -0.3:
+		blend_y = -1.0
+	else:
+		blend_y = 0.0
+	# X axis: clamped strafe
+	var blend_x := clampf(right_proj / SPEED, -1.0, 1.0)
+	return Vector2(blend_x, blend_y)
+
+func _update_foot_ik(delta: float) -> void:
+	if _foot_target_r == null or _foot_target_l == null:
+		return
+	var grounded := is_on_floor()
+	if _foot_ik_r:
+		_foot_ik_r.active = grounded
+	if _foot_ik_l:
+		_foot_ik_l.active = grounded
+	if not grounded:
+		return
+	_raycast_foot_target(_foot_target_r, "leg_r_fore")
+	_raycast_foot_target(_foot_target_l, "leg_l_fore")
+
+func _raycast_foot_target(target: Marker3D, bone: String) -> void:
+	var skeleton: Skeleton3D = $PlayerModel.find_child("Skeleton3D", true, false)
+	if skeleton == null:
+		return
+	var bone_idx := skeleton.find_bone(bone)
+	if bone_idx == -1:
+		return
+	var bone_pos := skeleton.get_bone_global_pose(bone_idx).origin
+	# Convert from skeleton local space to world space
+	var world_pos := skeleton.global_transform * bone_pos
+	var space := get_world_3d().direct_space_state
+	var from := world_pos + Vector3.UP * 0.5
+	var to := world_pos + Vector3.DOWN * 1.0
+	var query := PhysicsRayQueryParameters3D.create(from, to, 1)  # layer 1 = world geometry
+	query.exclude = [self]
+	var hit := space.intersect_ray(query)
+	if hit:
+		target.global_position = hit.position + Vector3.UP * 0.05
+	else:
+		target.global_position = world_pos
 
 func _equip_slot(idx: int) -> void:
 	if idx != SLOT_FISTS and _inventory[idx] == null:
@@ -517,6 +602,58 @@ func _build_voxel_body() -> void:
 				if child is MeshInstance3D or child is AudioStreamPlayer3D or child is GPUParticles3D:
 					child.transform = old_xform * child.transform
 
+	_setup_skeleton_modifiers(skeleton)
+
+
+func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
+	# LookAt: head_bottom (parent) must precede head_top (child) in modifier order.
+	var look_path := skeleton.get_path_to(_look_at_target) if _look_at_target else NodePath("")
+
+	var la_bottom := LookAtModifier3D.new()
+	la_bottom.name = "LookAt_head_bottom"
+	la_bottom.bone_name = "head_bottom"
+	la_bottom.target_node = look_path
+	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z  # rig looks -Z
+	la_bottom.use_angle_limitation = true
+	la_bottom.symmetry_limitation = true
+	la_bottom.primary_limit_angle = deg_to_rad(60.0)   # 120° total cone
+	la_bottom.secondary_limit_angle = deg_to_rad(40.0)
+	skeleton.add_child(la_bottom)
+
+	var la_top := LookAtModifier3D.new()
+	la_top.name = "LookAt_head_top"
+	la_top.bone_name = "head_top"
+	la_top.target_node = look_path
+	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z
+	la_top.use_angle_limitation = true
+	la_top.symmetry_limitation = true
+	la_top.primary_limit_angle = deg_to_rad(40.0)
+	la_top.secondary_limit_angle = deg_to_rad(25.0)
+	skeleton.add_child(la_top)
+
+	# Foot IK — TwoBoneIK3D per leg.  Targets are Marker3D nodes updated by raycast.
+	_foot_ik_r = _make_foot_ik(skeleton, "FootIK_R", "leg_r_upper", "leg_r_fore",
+		_foot_target_r, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
+	_foot_ik_l = _make_foot_ik(skeleton, "FootIK_L", "leg_l_upper", "leg_l_fore",
+		_foot_target_l, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
+
+
+func _make_foot_ik(skeleton: Skeleton3D, node_name: String,
+		root_bone: String, mid_bone: String,
+		target_marker: Marker3D,
+		pole_dir: SkeletonModifier3D.SecondaryDirection) -> TwoBoneIK3D:
+	var ik := TwoBoneIK3D.new()
+	ik.name = node_name
+	ik.setting_count = 1
+	ik.set_root_bone_name(0, root_bone)
+	ik.set_middle_bone_name(0, mid_bone)
+	ik.set_use_virtual_end(0, true)   # virtual foot at tip of mid bone
+	ik.set_pole_direction(0, pole_dir)
+	if target_marker:
+		ik.set_target_node(0, skeleton.get_path_to(target_marker))
+	skeleton.add_child(ik)
+	return ik
+
 
 func take_damage(amount: float) -> void:
 	if _is_dead or segments.is_empty():
@@ -569,8 +706,8 @@ func _disable_arm_side(seg_name: String) -> void:
 		var w: WeaponBase = _inventory[slot]
 		if w == null:
 			continue
-		var should_drop := (w.held_side == side) or \
-			(w.requires_both_hands and not _hand_usable.get(other_side, true))
+		var should_drop: bool = (w.held_side == side) or \
+			(w.requires_both_hands and not (_hand_usable.get(other_side, true) as bool))
 		if should_drop:
 			_drop_weapon(slot)  # also switches to SLOT_FISTS if _current_slot == slot
 
@@ -647,6 +784,8 @@ func _respawn() -> void:
 	_weapon_anchor = null
 	segments.clear()
 	_is_dead = false
+	_foot_ik_r = null
+	_foot_ik_l = null
 
 	# 9. Re-create fists
 	var fists_scene := WeaponRegistry.get_scene(&"fists")

@@ -18,3 +18,5 @@ shape = SubResource("CapsuleShape3D_brawl")
 
 [node name="PlayerModel" parent="." instance=ExtResource("2_rig")]
 transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
+
+[node name="AnimationTree" type="AnimationTree" parent="PlayerModel"]

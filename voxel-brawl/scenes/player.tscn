@@ -27,5 +27,7 @@ collide_with_areas = true
 [node name="PlayerModel" parent="." unique_id=2138265789 instance=ExtResource("1_y4r1p")]
 transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
 
+[node name="AnimationTree" type="AnimationTree" parent="PlayerModel"]
+
 [node name="StanceManager" type="Node" parent="." unique_id=1472633680]
 script = ExtResource("11_d2wvv")
