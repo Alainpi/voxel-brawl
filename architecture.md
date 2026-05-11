@@ -442,9 +442,13 @@ var _player       # duck-typed: Player or Brawler
 var weapon_id: StringName
 enum WeaponType { BLUNT, SHARP, RANGED }
 var weapon_type: WeaponType
+var held_side: StringName = &"r"        # which hand mounts this weapon
+var requires_both_hands: bool = false   # gates two-handed weapons against hand loss
 ```
 
 Calls `_configure()` (virtual) in `_ready()`. `_player` must be set externally before `add_child`.
+
+**Hand-side fields** (`held_side`, `requires_both_hands`) gate pickup and trigger drops on hand/arm loss. All current prototype weapons use `held_side = &"r"`; no prototype weapon sets `requires_both_hands = true` yet, but the gating is wired so a future two-handed weapon works without code changes. See §9 (`give_weapon` flow) and §16 (Player's `segment_broken` / per-segment `detached` listeners) for how these are consumed.
 
 ### WeaponMelee — controllable variables
 
@@ -564,24 +568,25 @@ Per-weapon data:
 | `pickup_rotation` | Vector3 | Applied to pickup mesh node |
 | `pickup_scale` | float | Applied to pickup mesh node |
 
-### WeaponBase hand-side fields
+### Player hand-usability state
 
-Two fields on `WeaponBase` gate pickup eligibility:
+```gdscript
+var _hand_usable: Dictionary = {&"r": true, &"l": true}
+```
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `held_side` | `StringName` | `&"r"` | Which hand mounts this weapon. All current prototype weapons use `&"r"`. |
-| `requires_both_hands` | `bool` | `false` | If true, both hands must be intact. No prototype weapon sets this yet. |
+Set to `false` for a side when that side's hand or any arm segment above it goes BROKEN or DETACHED (driven by `_disable_arm_side()` off `LimbSystem.segment_broken` and per-segment `detached`; see §16). Reset to `{&"r": true, &"l": true}` on respawn (§17). Read by `give_weapon()` to gate pickups against `WeaponBase.held_side` (§8).
 
 ### `give_weapon(id: StringName)` flow
 
 1. Look up slot from WeaponRegistry
-2. **Gate:** if slot ≠ SLOT_FISTS, probe `held_side` / `requires_both_hands` from a temporary (un-parented) instance. If `_hand_usable[held_side] == false`, or if `requires_both_hands` and either hand is disabled, refuse the pickup (weapon stays in world).
+2. **Hand-usability gate:** if slot ≠ SLOT_FISTS, probe `held_side` / `requires_both_hands` (§8) from a temporary (un-parented) instance. If `_hand_usable[held_side] == false`, or if `requires_both_hands` and either hand is disabled, refuse the pickup (weapon stays in world).
 3. Drop existing weapon in that slot if occupied (`_drop_weapon`)
 4. Instance scene, set `_player`, `weapon_id`
 5. Add to WeaponHolder; hide and disable physics until equipped
 6. If ranged: connect `ammo_changed` signal
 7. Call `_equip_slot(slot)`
+
+When a hand/arm goes BROKEN or DETACHED mid-fight, `_disable_arm_side()` flips `_hand_usable[side]` and calls `_drop_weapon(slot)` for any held weapon whose `held_side` matches (or any `requires_both_hands` weapon when the *other* side is also disabled), spawning the same world pickup the manual `G` drop produces. The handler is idempotent — repeat signals on already-disabled sides are no-ops.
 
 ### WeaponPickup scene
 

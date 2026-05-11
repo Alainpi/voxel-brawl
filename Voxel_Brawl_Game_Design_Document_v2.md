@@ -6,6 +6,10 @@
 **Target: Playable Prototype in 1–3 Months**
 Platforms: Windows & macOS | Players: Up to 8 | Online (Direct IP)
 
+*v3.6 — Phase 3 slimmed further: player mobility & cover (crouch/prone/lean) moved entirely to Phase 3.5, and the animation portion of differentiated leg-loss (hobble/crawl) also moved to 3.5. Phase 3 now closes out with just two open items — weapon slot disable and the leg-loss speed-tier mechanic. Rationale: 3.5 will do a full animation rework to set everything up for Godot's IK animation functionality, so all new animation authoring belongs there. Goal is to reach 3.5 ASAP and start polishing.*
+
+*v3.5 — Phase 3 slimmed to the three remaining open tasks (weapon slot disable, differentiated leg-loss speed penalty with hobble/crawl animation, player mobility & cover). Weapon polish (carryover from Phase 2) and IK-layered animation polish moved to Phase 3.5 alongside the existing polish workstreams — every polish pass now lives in one place.*
+
 *v3.4 — Phase 3 gains IK-layered animation task; new Phase 3.5 Polish Pass inserted between Phase 3 and Phase 4 to tighten UI, animations, weapon damage, character health, and assorted oddities before multiplayer complicates debugging.*
 
 ---
@@ -533,9 +537,9 @@ Built the final character art first so that all destruction tuning, weapon posit
 
 ### Phase 3: Skeletal Destruction (Weeks 9–11)
 
-**Goal: Close the remaining gaps in the 14-bone destruction system, add authored bone rendering, and build out player mobility and per-weapon identity.**
+**Goal: Close the remaining gaps in the 14-bone destruction system and ship the leg-loss speed mechanic so we can move into the Phase 3.5 polish/animation rework.**
 
-*Phase 3 was originally scoped as "upgrade 6 to 14 segments + hierarchy propagation + tuning." Most of that shipped early in Phase 2. What remains is: logical cascade cleanup, authored bone rendering, weapon-slot coupling, distinct per-weapon feel, per-bone tuning, and the deferred player mobility + cover work.*
+*Phase 3 was originally scoped as "upgrade 6 to 14 segments + hierarchy propagation + tuning." Most of that shipped early in Phase 2. What remained was: logical cascade cleanup, authored bone rendering, weapon-slot coupling, per-bone tuning, differentiated leg-loss, and the deferred player mobility + cover work. As of v3.5, weapon polish and IK-layered animation polish moved to Phase 3.5. As of v3.6, player mobility & cover moved to 3.5 in full, and the animation half of differentiated leg-loss (hobble/crawl) moved with it — only the speed-tier logic stays in Phase 3. Phase 3 is intentionally short now; the priority is reaching 3.5 quickly so the full animation rework can set everything up against Godot's IK animation functionality at once.*
 
 **Context: what's already in place from Phase 2**
 
@@ -587,43 +591,15 @@ Bone .vox files load lazily when flesh drops below `BONE_REVEAL_THRESHOLD`. Inte
 
 `BREAK_THRESHOLD` and `DETACH_THRESHOLD` replaced with per-segment override dictionaries + default fallbacks. Helpers `_break_threshold(seg_name)` / `_detach_threshold(seg_name)` look up overrides with fallback. Assert in `initialize()` enforces `break > detach` for every segment. Starting values: head (break=0.70, detach=0.20), hands (break=0.80, detach=0.50), all others (break=0.50, detach=0.00). Verified against all four test cases.
 
-**5. Weapon polish (carryover from Phase 2)**
+**5. Differentiated leg-loss speed penalty (mechanic only — animations moved to Phase 3.5)**
 
-These require the cleaned-up cascade + slot-disable logic above.
+`_legs_lost` is currently a counter (any leg loss = same penalty). Replace with seg-name-aware logic that drives a speed multiplier off the actual lost segments. Tiers:
 
-- **Katana — bleed:** Sharp hits start a timed voxel drain on the struck segment (lose N voxels/sec for 3 seconds). Stacks per hit. Implement as a timer + drain coroutine on VoxelSegment, triggered from `WeaponKatana._apply_hit()`.
-- **Katana — forced sever:** A single clean katana hit to an arm or leg at full damage pushes the segment past its detach threshold immediately, regardless of remaining voxel count. Add a `force_detach` flag to `DamageManager.process_hit()`.
-- **Bat — bone degradation tuning:** BLUNT_MULTIPLIER is in place but needs per-segment tuning and the "limp broken limb" visual state (ragdoll connection already handles this — verify it reads correctly).
-- **Weapon-specific hit feedback:** Lookup tables keyed off `weapon_type` or `weapon_id` for: hit audio, screen shake intensity, debris particle color. Red splatter for katana, grey dust for bat, muzzle-flash-tinted for ranged.
-- **Shotgun pump animation:** Add to Blender rig and map in `play_attack_anim()`.
+- Losing a foreleg only: moderate speed penalty (~25%)
+- Losing a full leg (upper + fore): severe penalty (~50%)
+- Losing both legs (any combination that totals two upper-leg-equivalents): crawl-only movement (very low speed cap; treat as a movement state flag the future crawl animation will hook into)
 
-**6. Differentiated leg-loss speed penalty**
-
-`_legs_lost` is currently a counter. Replace with seg-name-aware logic:
-
-- Losing a foreleg: moderate speed penalty (~25%)
-- Losing a full leg (upper + fore): severe penalty (~50% + crawl animation)
-- Losing both legs: crawl-only movement
-
-**7. Player mobility & cover (carryover from Phase 2)**
-
-Build in this order — simplest to hardest:
-
-- **Crouch** (hold C): reduces player collision capsule height by ~50%, slower movement, can move behind low cover. Straightforward — capsule resize + speed multiplier.
-- **Prone** (double-tap C or hold X): flat crawl, very slow movement, smallest profile. Needs animation state and transition handling.
-- **Lean left / right** (Q / E while near cover): peek around corners; only the leaning portion of the hitbox extends past cover. Trickiest piece because it must offset the character capsule without desyncing the mouse-aim projection onto the `y=0` plane.
-
-Muzzle position naturally handles cover physics because ranged shots already originate from the Muzzle Node3D — crouching drops the barrel below wall tops, leaning clears corners only when the lean is sufficient.
-
-**8. IK-layered animation polish**
-
-Animations currently play directly via `anim_player.play()` calls, which means every motion is entirely baked. Add procedural IK layers on top of the existing keyframe animations so movement reads as alive without giving up combat-timing precision.
-
-- **Keep keyframe animations for attacks and specific poses.** The stance system and hit-window timing (`hit_enable_delay`, `hit_window_duration`) are tightly coupled to baked animation lengths, and that precision matters for combat feel. Do not replace attack animations with procedural motion.
-- **Add procedural layers on top.** Foot IK for terrain (plant the feet correctly on uneven ground and stairs), procedural head-look toward nearby enemies or the aim point, torso lean based on movement direction, subtle idle breathing and sway. These layer onto the existing animations without replacing them.
-- **Use `AnimationTree` to blend between the keyframe base layer and procedural overrides.** This is the standard Godot pattern and would replace direct `anim_player.play()` calls. Migration order: set up AnimationTree alongside the current AnimationPlayer, port one state at a time, retire the direct `play()` calls only after every animation path has been reproduced in the tree.
-
-Good integration candidates once AnimationTree is in place: crouch/prone/lean blend states from task 7, the stance-weapon matrix, and the "limp broken limb" visual state from task 5.
+Ship just the multiplier + state-flag logic in Phase 3. The existing walk cycle will look wrong against severe penalties — that's expected, and acceptable for now. Hobble and crawl animations are authored in Phase 3.5 as part of the full animation rework, where they can be built directly into the new AnimationTree + IK setup instead of as one-off keyframes that would need to be redone.
 
 ---
 
@@ -634,18 +610,18 @@ Good integration candidates once AnimationTree is in place: crouch/prone/lean bl
 - Players can still fight with a severed upper arm, but lose everything below if the humerus goes
 - Bleed-through destruction: carving flesh exposes authored bone, which takes more hits to destroy
 - Hand loss: losing `hand_r` prevents equipping weapons in the right slot; losing both hands prevents two-handed weapons
-- Cover + leaning: ranged combat gains tactical depth — peek, shoot, return to cover
+- Leg-loss speed tiers: foreleg vs full leg vs both legs each map to a distinct speed/movement-state outcome — even before the animations land in 3.5, the mechanic shapes how cornered fights play out
 
 ---
 
-**Recommended build order (from the Phase 2 → 3 analysis, 2026-04-17):**
+**Recommended build order (updated 2026-04-26 for v3.6):**
 
 1. ✅ Logical cascade detachment + per-bone thresholds (2026-04-19)
-2. Weapon slot disable + katana bleed / forced sever (defines katana identity)
-3. ✅ Authored bone .vox lazy loading (2026-04-19)
-4. Player mobility — crouch, then prone, then lean (biggest chunk)
-5. IK animation layer — AnimationTree migration + foot IK / head-look / torso lean / idle sway
-6. Final Phase 3 polish — per-weapon hit feedback, leg-loss differential, shotgun pump anim
+2. ✅ Authored bone .vox lazy loading (2026-04-19)
+3. Weapon slot disable on hand/arm loss (unlocks the listener pattern for other future detach-triggered UI)
+4. Differentiated leg-loss speed penalty — mechanic only; seg-name-aware multiplier + crawl-state flag
+
+Then move directly into Phase 3.5. Weapon polish, IK-layered animation polish, player mobility & cover (crouch/prone/lean), the hobble/crawl animations for task 4 above, and the full animation rework all live in 3.5 — see that section.
 
 ### Phase 3.5: Polish Pass (before multiplayer)
 
@@ -653,10 +629,25 @@ Good integration candidates once AnimationTree is in place: crouch/prone/lean bl
 
 *Multiplayer amplifies every bug. A weapon damage inconsistency in single-player becomes "is this a server-client desync or a balance issue?" in multiplayer. Phase 3.5 is a deliberate pause before Phase 4 to clean up oddities while the state of the game is still fully local and reproducible.*
 
+**Animation rework (v3.6, the spine of this phase).** Before authoring any new animations, do a full rework of the existing animation pipeline to set everything up against Godot's IK animation functionality. Concretely: stand up an `AnimationTree` alongside the current `AnimationPlayer`, port every existing state (idle, walk, run, attack-per-weapon, stance transitions) into the tree, and retire the direct `anim_player.play()` calls only after every path has a tree equivalent. Keyframe attacks and stance poses stay baked because the hit-window timing is coupled to their lengths — the rework is about giving them an IK layer to live on top of, not replacing them. Once the tree is in place, every new animation in this phase (hobble, crawl, crouch, prone, lean, hit reactions, weapon swap, footstep IK, head-look, idle sway) gets authored against the new pipeline directly instead of as one-off `play()` calls that would have to be ported later. This is why Phase 3 was kept short — anything authored before this rework would be thrown away.
+
 **Target areas:**
 
+- **Player mobility & cover (moved from Phase 3 in v3.6).** Build crouch, prone, and lean against the new AnimationTree once the rework above is in place.
+  - **Crouch** (hold C): reduces player collision capsule height by ~50%, slower movement, can move behind low cover. Straightforward — capsule resize + speed multiplier, plus a crouch blend state in the tree.
+  - **Prone** (double-tap C or hold X): flat crawl, very slow movement, smallest profile. Needs an animation state in the tree and transition handling.
+  - **Lean left / right** (Q / E while near cover): peek around corners; only the leaning portion of the hitbox extends past cover. Trickiest piece because it must offset the character capsule without desyncing the mouse-aim projection onto the `y=0` plane. Lean is a strong candidate to drive partially via IK (torso bend) once the layer system is in place.
+  - Muzzle position naturally handles cover physics because ranged shots already originate from the Muzzle Node3D — crouching drops the barrel below wall tops, leaning clears corners only when the lean is sufficient. Cover + leaning is what gives ranged combat its tactical depth: peek, shoot, return to cover.
+- **Hobble + crawl animations (mechanic landed in Phase 3 task 5).** Author the asymmetric foreleg hobble, the heavy full-leg hobble / one-legged hop, and the both-legs-lost crawl directly into the AnimationTree. Hook them off the speed-tier flags already shipped in Phase 3 so the visual reads as severe as the mechanic.
 - **UI polish.** HUD readability, layout consistency across aspect ratios, crosshair behavior on fire + recovery, pickup prompt timing, stance indicator clarity, HP bar feedback, ammo/reload states, weapon name transitions on equip, any z-ordering or anchoring quirks.
-- **Animation polish.** Transitions between states (idle → run, run → attack, stance changes), animation blend weights in the new AnimationTree, tune IK layer weights from Phase 3 task 8, add hit reaction / flinch animations, smooth weapon swap animation.
+- **Weapon feature polish (moved from Phase 3 in v3.5).** These are the carryover items that define per-weapon identity. Land them here so the balance tuning bullet below has real systems to tune against.
+  - **Katana — bleed:** Sharp hits start a timed voxel drain on the struck segment (lose N voxels/sec for 3 seconds). Stacks per hit. Implement as a timer + drain coroutine on VoxelSegment, triggered from `WeaponKatana._apply_hit()`.
+  - **Katana — forced sever:** A single clean katana hit to an arm or leg at full damage pushes the segment past its detach threshold immediately, regardless of remaining voxel count. Add a `force_detach` flag to `DamageManager.process_hit()`.
+  - **Bat — bone degradation tuning:** BLUNT_MULTIPLIER is in place but needs per-segment tuning and the "limp broken limb" visual state (ragdoll connection already handles this — verify it reads correctly).
+  - **Weapon-specific hit feedback:** Lookup tables keyed off `weapon_type` or `weapon_id` for: hit audio, screen shake intensity, debris particle color. Red splatter for katana, grey dust for bat, muzzle-flash-tinted for ranged.
+  - **Shotgun pump animation:** Add to Blender rig and map in `play_attack_anim()`.
+- **IK procedural layers (rides on top of the rework above).** With AnimationTree in place, add procedural IK layers on top of the keyframe base so movement reads as alive without giving up combat-timing precision. Keyframe attacks/poses stay baked — IK adds feel on top, it doesn't replace them. Layers to add: foot IK for terrain (plant feet correctly on uneven ground and stairs), procedural head-look toward nearby enemies or the aim point, torso lean based on movement direction (also drives the lean-cover stance), subtle idle breathing and sway. Strongest integration points: crouch/prone/lean blend states, the hobble/crawl states, the stance-weapon matrix, and the "limp broken limb" visual state (handled by the bat tuning bullet above).
+- **Animation polish (general).** Transitions between states (idle → run, run → attack, stance changes), animation blend weights in the new AnimationTree, tune IK layer weights from the bullet above, add hit reaction / flinch animations, smooth weapon swap animation.
 - **Weapon damage tuning.** Per-weapon balance pass against Brawler NPC and Dummy. Verify damage numbers feel right across every stance, forced sever fires consistently on clean katana hits, bleed durations land correctly and stack as intended, bat integrity drain produces the right time-to-break, shotgun pellet spread lands the expected number of hits at intended range.
 - **Character health tuning.** Revisit `MAX_HP = 100` and per-segment weights — playtest whether a torso shot should two-shot or three-shot a fresh character, whether head weights encourage or discourage headshotting, and whether bone layer adds the right "second-chance" feel against over-damaged limbs.
 - **Audio polish.** Hit audio layered per weapon and per material (flesh vs bone vs wall), footsteps, ambient loop, pickup chime, death stinger, low-HP cue if warranted.
