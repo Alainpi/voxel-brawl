@@ -43,11 +43,28 @@ var _attachments: Array = []
 var _fists: WeaponFists = null
 var _limb_system: LimbSystem = null
 var _health_system: HealthSystem = null
+var _foot_ik_r: TwoBoneIK3D = null
+var _foot_ik_l: TwoBoneIK3D = null
+var _foot_target_r: Marker3D = null
+var _foot_target_l: Marker3D = null
+var _head_look_target: Marker3D = null  # tracks player position; child of self
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var anim_player: AnimationPlayer = $PlayerModel.find_child("AnimationPlayer", true, false) as AnimationPlayer
+@onready var anim_tree: AnimationTree = $PlayerModel.find_child("AnimationTree", true, false) as AnimationTree
 
 func _ready() -> void:
+	# Foot IK targets
+	_foot_target_r = Marker3D.new()
+	_foot_target_r.name = "FootTargetR"
+	add_child(_foot_target_r)
+	_foot_target_l = Marker3D.new()
+	_foot_target_l.name = "FootTargetL"
+	add_child(_foot_target_l)
+	# Look-at target: follows player position; updated in _physics_process
+	_head_look_target = Marker3D.new()
+	_head_look_target.name = "HeadLookTarget"
+	add_child(_head_look_target)
 	call_deferred("_build_body")
 	call_deferred("_find_player")
 
@@ -72,9 +89,42 @@ func _physics_process(delta: float) -> void:
 			Vector2(global_position.x, global_position.z)
 		)
 
+	# Update look-at target to follow player
+	if _player != null and _head_look_target != null:
+		_head_look_target.global_position = _player.global_position + Vector3.UP * 1.0
+
 	_update_ai()
 	_update_animation()
 	move_and_slide()
+	_update_foot_ik()
+
+func _update_foot_ik() -> void:
+	if _foot_target_r == null or _foot_target_l == null:
+		return
+	var grounded := is_on_floor()
+	if _foot_ik_r:
+		_foot_ik_r.active = grounded
+	if _foot_ik_l:
+		_foot_ik_l.active = grounded
+	if not grounded:
+		return
+	_raycast_foot("leg_r_fore", _foot_target_r)
+	_raycast_foot("leg_l_fore", _foot_target_l)
+
+func _raycast_foot(bone: String, target: Marker3D) -> void:
+	var skeleton: Skeleton3D = $PlayerModel.find_child("Skeleton3D", true, false)
+	if skeleton == null:
+		return
+	var bone_idx := skeleton.find_bone(bone)
+	if bone_idx == -1:
+		return
+	var world_pos := skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx).origin
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(
+		world_pos + Vector3.UP * 0.5, world_pos + Vector3.DOWN * 1.0, 1)
+	query.exclude = [self]
+	var hit := space.intersect_ray(query)
+	target.global_position = hit.position + Vector3.UP * 0.05 if hit else world_pos
 
 func _update_ai() -> void:
 	if _player == null:
@@ -114,12 +164,25 @@ func _update_ai() -> void:
 				_do_attack()
 
 func _update_animation() -> void:
-	if _is_attacking or anim_player == null:
+	if _is_attacking:
 		return
-	var moving := velocity.length_squared() > 0.01
-	var target := "walk" if moving else "idle"
-	if anim_player.current_animation != target:
-		anim_player.play(target)
+	if anim_tree and anim_tree.active:
+		anim_tree.set("parameters/locomotion/blend_position", _get_loco_blend())
+
+func _get_loco_blend() -> Vector2:
+	var flat_vel := Vector2(velocity.x, velocity.z)
+	if flat_vel.length_squared() < 0.01:
+		return Vector2.ZERO
+	# Brawler always walks (no sprint), Y tops out at 0.5
+	var char_fwd := Vector2(-global_transform.basis.z.x, -global_transform.basis.z.z)
+	var char_right := Vector2(global_transform.basis.x.x, global_transform.basis.x.z)
+	if char_fwd.length_squared() < 0.001:
+		return Vector2.ZERO
+	var fwd_proj := flat_vel.dot(char_fwd.normalized())
+	var right_proj := flat_vel.dot(char_right.normalized())
+	var blend_y := 0.5 if fwd_proj > 0.3 else (-0.5 if fwd_proj < -0.3 else 0.0)
+	var blend_x := clampf(right_proj / SPEED, -1.0, 1.0)
+	return Vector2(blend_x, blend_y)
 
 func _move_toward_player() -> void:
 	nav_agent.target_position = _player.global_position
@@ -253,9 +316,60 @@ func _build_body() -> void:
 
 	if anim_player:
 		anim_player.animation_finished.connect(_on_anim_finished)
-		anim_player.play("idle")
+
+	# AnimationTree locomotion + breathe
+	if anim_tree and anim_player:
+		AnimTreeSetup.build_and_activate(anim_tree, anim_player)
+
+	# Skeleton modifiers
+	_setup_skeleton_modifiers(skeleton)
 
 	_setup_fists()
+
+func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
+	# add_child() first, then get_path_to() from the modifier itself.
+	# NodePath properties resolve relative to the node that owns them, not their parent.
+
+	var la_bottom := LookAtModifier3D.new()
+	la_bottom.name = "LookAt_head_bottom"
+	la_bottom.bone_name = "head_bottom"
+	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
+	la_bottom.use_angle_limitation = true
+	la_bottom.symmetry_limitation = true
+	la_bottom.primary_limit_angle = deg_to_rad(60.0)
+	la_bottom.secondary_limit_angle = deg_to_rad(40.0)
+	skeleton.add_child(la_bottom)
+	if _head_look_target:
+		la_bottom.target_node = la_bottom.get_path_to(_head_look_target)
+
+	var la_top := LookAtModifier3D.new()
+	la_top.name = "LookAt_head_top"
+	la_top.bone_name = "head_top"
+	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
+	la_top.use_angle_limitation = true
+	la_top.symmetry_limitation = true
+	la_top.primary_limit_angle = deg_to_rad(40.0)
+	la_top.secondary_limit_angle = deg_to_rad(25.0)
+	skeleton.add_child(la_top)
+	if _head_look_target:
+		la_top.target_node = la_top.get_path_to(_head_look_target)
+
+	_foot_ik_r = _make_foot_ik(skeleton, "FootIK_R", "leg_r_upper", "leg_r_fore", _foot_target_r)
+	_foot_ik_l = _make_foot_ik(skeleton, "FootIK_L", "leg_l_upper", "leg_l_fore", _foot_target_l)
+
+func _make_foot_ik(skeleton: Skeleton3D, node_name: String,
+		root_bone: String, mid_bone: String, target_marker: Marker3D) -> TwoBoneIK3D:
+	var ik := TwoBoneIK3D.new()
+	ik.name = node_name
+	ik.setting_count = 1
+	ik.set_root_bone_name(0, root_bone)
+	ik.set_middle_bone_name(0, mid_bone)
+	ik.set_use_virtual_end(0, true)
+	ik.set_pole_direction(0, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
+	skeleton.add_child(ik)
+	if target_marker:
+		ik.set_target_node(0, ik.get_path_to(target_marker))
+	return ik
 
 func _setup_fists() -> void:
 	if is_instance_valid(_fists):
@@ -326,6 +440,8 @@ func _reset() -> void:
 	await get_tree().process_frame
 	_lost_legs.clear()
 	_is_attacking = false
+	_foot_ik_r = null
+	_foot_ik_l = null
 	_is_dead = false
 	_state = State.IDLE
 	_build_body()

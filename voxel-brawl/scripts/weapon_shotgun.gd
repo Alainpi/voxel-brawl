@@ -5,10 +5,10 @@ extends WeaponRanged
 
 const PELLET_COUNT := 6
 
-@export var spread_near: float = 0.25          # half-angle radians at point-blank (v1: only this is used)
+@export var spread_near: float = 0.5           # scatter radius in world units at the aim plane (v1: only this is used)
 # v2 placeholders — reserved for distance-based falloff; not wired in v1.
-@export var spread_far: float  = 0.08          # half-angle radians at max range
-@export var spread_falloff_dist: float = 12.0  # distance (world units) where cone fully tightens
+@export var spread_far: float  = 0.1           # scatter radius at max range
+@export var spread_falloff_dist: float = 12.0  # distance (world units) where radius fully tightens
 
 func _configure() -> void:
 	weapon_type = WeaponType.RANGED
@@ -40,12 +40,14 @@ func _fire() -> void:
 	)
 	if aim_flat.length_squared() < 0.001:
 		return
-	var aim_dir_h := aim_flat.normalized()
 
-	# Each pellet gets an independent spread angle applied to both rays.
-	# spread_near used for all pellets in v1; distance-based lerp to spread_far
-	# can be tuned post-playtesting once the spread_falloff_dist feel is confirmed.
+	# Scatter each pellet at the aim plane (world-space XZ) so spread maps to actual
+	# body-part coverage rather than amplifying through the top-down camera angle.
+	# spread_near is the scatter radius in world units.
+	var cam_origin: Vector3 = _player.get_camera_ray()["origin"]
 	for i in range(PELLET_COUNT):
-		var angle := randf_range(-spread_near, spread_near)
-		var spread_dir := aim_dir_h.rotated(Vector3.UP, angle)
-		_fire_ray(spread_dir, angle)
+		var r     := randf_range(0.0, spread_near)
+		var theta := randf_range(0.0, TAU)
+		var scatter := Vector3(cos(theta) * r, 0.0, sin(theta) * r)
+		var pellet_dir := (mouse_world + scatter - cam_origin).normalized()
+		_fire_ray(pellet_dir)

@@ -8,3 +8,5 @@ script = ExtResource("1_kre8v")
 
 [node name="PlayerModel" parent="." unique_id=442273515 instance=ExtResource("2_k5f3b")]
 transform = Transform3D(-0.4, 0, -3.4969112e-08, 0, 0.4, 0, 3.4969112e-08, 0, -0.4, 0, 0, 0)
+
+[node name="AnimationTree" type="AnimationTree" parent="PlayerModel"]

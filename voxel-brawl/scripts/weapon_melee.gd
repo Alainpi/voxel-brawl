@@ -43,6 +43,7 @@ func _ready() -> void:
 # If hit_shape is null, super() skips the primary CollisionShape3D.
 func _create_hitarea() -> void:
 	_hit_area = Area3D.new()
+	_hit_area.name = "HitArea"
 	_hit_area.collision_layer = 0
 	_hit_area.collision_mask = 2
 	_hit_area.monitoring = false

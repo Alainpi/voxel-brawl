@@ -74,29 +74,30 @@ func _fire() -> void:
 	)
 	if aim_flat.length_squared() < 0.001:
 		return
-	_fire_ray(aim_flat.normalized())
+	_fire_ray()
 
-# Fires a single ray. Override _fire() and call this multiple times for spread weapons.
-func _fire_ray(aim_dir_h: Vector3, spread_angle: float = 0.0) -> void:
+# Fires a single ray. Override _fire() and call this for spread weapons, passing a
+# pre-computed cam_dir (e.g. per-pellet scatter direction from WeaponShotgun).
+func _fire_ray(cam_dir_in: Vector3 = Vector3.ZERO) -> void:
 	var muzzle_pos: Vector3 = muzzle.global_position
 	var space := get_world_3d().direct_space_state
 
-	# Ray 1 — horizontal wall check from muzzle (layer 1 = static bodies only)
+	# Resolve aim direction: caller-supplied override or live camera ray.
+	var cam_ray: Dictionary = _player.get_camera_ray()
+	var cam_origin: Vector3 = cam_ray["origin"]
+	var cam_dir: Vector3 = cam_dir_in if cam_dir_in.length_squared() > 0.001 else cam_ray["dir"]
+
+	# Both rays fire from cam_origin so the hit position matches the cursor aim.
+	# Ray 1 — wall check (layer 1 = static bodies only).
 	var wall_params := PhysicsRayQueryParameters3D.create(
-		muzzle_pos, muzzle_pos + aim_dir_h * RAY_LENGTH, 1
+		cam_origin, cam_origin + cam_dir * RAY_LENGTH, 1
 	)
 	wall_params.collide_with_areas = false
 	wall_params.collide_with_bodies = true
 	wall_params.exclude = [_player.get_rid()]
 	var wall_hit := space.intersect_ray(wall_params)
 
-	# Ray 2 — camera ray for precise voxel targeting (layer 2 = voxel areas only)
-	# spread_angle rotates it horizontally to match per-pellet spread direction.
-	var cam_ray: Dictionary = _player.get_camera_ray()
-	var cam_origin: Vector3 = cam_ray["origin"]
-	var cam_dir: Vector3 = cam_ray["dir"]
-	if spread_angle != 0.0:
-		cam_dir = cam_dir.rotated(Vector3.UP, spread_angle)
+	# Ray 2 — voxel targeting (layer 2 = voxel areas only).
 	var voxel_params := PhysicsRayQueryParameters3D.create(
 		cam_origin, cam_origin + cam_dir * RAY_LENGTH, 2
 	)
@@ -104,21 +105,11 @@ func _fire_ray(aim_dir_h: Vector3, spread_angle: float = 0.0) -> void:
 	voxel_params.collide_with_bodies = false
 	var voxel_hit := space.intersect_ray(voxel_params)
 
-	var wall_dist_h := INF
-	if not wall_hit.is_empty():
-		wall_dist_h = Vector2(
-			wall_hit.position.x - muzzle_pos.x,
-			wall_hit.position.z - muzzle_pos.z
-		).length()
+	# Shared origin means distance directly orders the two hits.
+	var wall_dist  := cam_origin.distance_to(wall_hit.position)  if not wall_hit.is_empty()  else INF
+	var voxel_dist := cam_origin.distance_to(voxel_hit.position) if not voxel_hit.is_empty() else INF
 
-	var voxel_dist_h := INF
-	if not voxel_hit.is_empty():
-		voxel_dist_h = Vector2(
-			voxel_hit.position.x - muzzle_pos.x,
-			voxel_hit.position.z - muzzle_pos.z
-		).length()
-
-	if not wall_hit.is_empty() and wall_dist_h <= voxel_dist_h:
+	if not wall_hit.is_empty() and wall_dist <= voxel_dist:
 		BulletTracer.spawn(muzzle_pos, wall_hit.position, tracer_color, get_tree().root)
 		_on_wall_hit(wall_hit.position, wall_hit.normal)
 		return

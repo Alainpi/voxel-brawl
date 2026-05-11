@@ -2,11 +2,22 @@
 class_name VoxelSegment
 extends Node3D
 
+# --- TUNING -------------------------------------------------------------------
+# Bone reveal
+const BONE_REVEAL_THRESHOLD: float = 0.85  # flesh fraction below which bone loads (0–1; lower = later reveal)
+const BONE_HP := 3.0                        # hits required to destroy one bone voxel (flesh = 1.0)
+
+# Hit appearance
+const DAMAGE_COLOR := Color(0.12, 0.04, 0.04)  # tint lerp target applied to flesh near impact
+const DAMAGE_TINT_RATIO := 0.5                  # lerp strength toward DAMAGE_COLOR (0 = no tint, 1 = full)
+const DAMAGE_TINT_RADIUS_MULT := 2.0            # tint radius = hit radius × this multiplier
+
+# Debris
+const CHUNK_MIN_VOXELS := 8    # disconnected clusters smaller than this spawn as particles, not rigid chunks
+const DEBRIS_MAX_PHYSICS := 8  # max RigidBody3D cubes spawned per hit (remainder goes to particle pool)
+# ------------------------------------------------------------------------------
+
 const VOXEL_SIZE := 0.1
-const DAMAGE_COLOR := Color(0.12, 0.04, 0.04)
-const BONE_COLOR := Color(0.92, 0.88, 0.78)
-const BONE_HP := 3.0          # interior voxels need this many hits to destroy
-const CHUNK_MIN_VOXELS := 8   # clusters smaller than this become debris particles
 
 const DIRS6 := [
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
@@ -29,6 +40,13 @@ var is_detached: bool = false
 var is_broken: bool = false
 var bone_attachment: String = ""
 var _root_voxels_cached: Array[Vector3i] = []
+
+var _bone_vox_path: String = ""
+var _bone_loaded: bool = false
+var _bone_voxels: Dictionary = {}       # ALL bone positions (replaced-flesh + pure-bone) — used for tint skip
+var _bone_over_flesh: Dictionary = {}   # bone positions that replaced existing flesh — still count toward flesh HP
+var flesh_voxel_count: int = 0
+var bone_voxel_count: int = 0
 
 var mesh_instance: MeshInstance3D
 var _pending_rebuild: bool = false
@@ -57,20 +75,15 @@ func load_from_vox(path: String) -> void:
 	_init_voxel_hp()
 	rebuild_mesh()
 
-# Mark interior voxels as bone (higher HP, bone color).
 func _init_voxel_hp() -> void:
 	voxel_hp.clear()
+	_bone_voxels.clear()
+	_bone_over_flesh.clear()
 	for pos: Vector3i in voxel_data:
-		var interior := true
-		for d in DIRS6:
-			if not voxel_data.has(pos + d):
-				interior = false
-				break
-		if interior:
-			voxel_hp[pos] = BONE_HP
-			voxel_data[pos] = BONE_COLOR
-		else:
-			voxel_hp[pos] = 1.0
+		voxel_hp[pos] = 1.0
+	flesh_voxel_count = voxel_data.size()
+	bone_voxel_count = 0
+	_bone_loaded = false
 	_cache_root_voxels()
 
 func _cache_root_voxels() -> void:
@@ -205,7 +218,7 @@ func dda_raycast(local_origin: Vector3, local_dir: Vector3, max_steps: int = 200
 # Called by DamageManager. center_local is in this node's local space.
 func take_hit(center_local: Vector3, radius_voxels: float, damage: float) -> void:
 	var radius_world := radius_voxels * VOXEL_SIZE
-	var tint_world := radius_world * 2.0
+	var tint_world := radius_world * DAMAGE_TINT_RADIUS_MULT
 	var actually_removed: Array[Vector3i] = []
 	var removed_colors: Dictionary = {}
 	var to_tint: Array[Vector3i] = []
@@ -225,17 +238,29 @@ func take_hit(center_local: Vector3, radius_voxels: float, damage: float) -> voi
 		return
 
 	for pos in to_tint:
-		voxel_data[pos] = voxel_data[pos].lerp(DAMAGE_COLOR, 0.5)
+		if not _bone_voxels.has(pos):
+			voxel_data[pos] = voxel_data[pos].lerp(DAMAGE_COLOR, DAMAGE_TINT_RATIO)
 
 	if not actually_removed.is_empty():
 		_spawn_debris_from(actually_removed, removed_colors, center_local)
 		for pos in actually_removed:
+			if _bone_voxels.has(pos) and not _bone_over_flesh.has(pos):
+				bone_voxel_count -= 1
+			else:
+				flesh_voxel_count -= 1
 			voxel_data.erase(pos)
 			voxel_hp.erase(pos)
+			_bone_voxels.erase(pos)
+			_bone_over_flesh.erase(pos)
 		current_voxel_count = voxel_data.size()
 
 		if not is_detached:
 			_check_connectivity()
+
+		if not _bone_loaded and _bone_vox_path != "" and total_voxel_count > 0:
+			var flesh_fraction := float(flesh_voxel_count) / float(total_voxel_count)
+			if flesh_fraction < BONE_REVEAL_THRESHOLD:
+				_load_bone_voxels()
 
 	if not _pending_rebuild:
 		_pending_rebuild = true
@@ -390,7 +415,7 @@ func _spawn_debris_from(removed: Array[Vector3i], colors: Dictionary, hit_origin
 		return (Vector3(a) * VOXEL_SIZE).distance_to(hit_origin) < (Vector3(b) * VOXEL_SIZE).distance_to(hit_origin)
 	)
 	var hit_world := to_global(hit_origin)
-	var physics_count := mini(8, sorted.size())
+	var physics_count := mini(DEBRIS_MAX_PHYSICS, sorted.size())
 	for i in physics_count:
 		var world_pos := to_global(Vector3(sorted[i]) * VOXEL_SIZE)
 		var impulse := (world_pos - hit_world).normalized() * randf_range(2.0, 5.0)
@@ -403,6 +428,32 @@ func _cluster_center_local(cluster: Array[Vector3i]) -> Vector3:
 	for pos in cluster:
 		sum += Vector3(pos) * VOXEL_SIZE
 	return sum / cluster.size()
+
+func _load_bone_voxels() -> void:
+	if _bone_loaded or _bone_vox_path == "":
+		return
+	var bone_data: Dictionary = VoxelLoader.load_vox(_bone_vox_path)
+	var replaced := 0
+	for pos in bone_data:
+		if voxel_data.has(pos):
+			# Flesh still here — overwrite with bone appearance and harden.
+			# Marked in _bone_over_flesh so HP tracking knows this was flesh.
+			voxel_data[pos] = bone_data[pos]
+			voxel_hp[pos] = BONE_HP
+			_bone_voxels[pos] = true
+			_bone_over_flesh[pos] = true
+			replaced += 1
+		else:
+			# Empty spot where flesh was already carved — net-new bone voxel.
+			voxel_data[pos] = bone_data[pos]
+			voxel_hp[pos] = BONE_HP
+			_bone_voxels[pos] = true
+			bone_voxel_count += 1
+	_bone_loaded = true
+	print("bone loaded: %s | replaced flesh: %d | new voxels: %d | total bone_data: %d" % [
+		_bone_vox_path.get_file(), replaced, bone_voxel_count, bone_data.size()
+	])
+	rebuild_mesh.call_deferred()
 
 func detach() -> void:
 	if is_detached:
