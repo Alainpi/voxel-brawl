@@ -327,29 +327,32 @@ func _build_body() -> void:
 	_setup_fists()
 
 func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
-	var look_path := skeleton.get_path_to(_head_look_target) if _head_look_target else NodePath("")
+	# add_child() first, then get_path_to() from the modifier itself.
+	# NodePath properties resolve relative to the node that owns them, not their parent.
 
 	var la_bottom := LookAtModifier3D.new()
 	la_bottom.name = "LookAt_head_bottom"
 	la_bottom.bone_name = "head_bottom"
-	la_bottom.target_node = look_path
-	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z
+	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
 	la_bottom.use_angle_limitation = true
 	la_bottom.symmetry_limitation = true
 	la_bottom.primary_limit_angle = deg_to_rad(60.0)
 	la_bottom.secondary_limit_angle = deg_to_rad(40.0)
 	skeleton.add_child(la_bottom)
+	if _head_look_target:
+		la_bottom.target_node = la_bottom.get_path_to(_head_look_target)
 
 	var la_top := LookAtModifier3D.new()
 	la_top.name = "LookAt_head_top"
 	la_top.bone_name = "head_top"
-	la_top.target_node = look_path
-	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z
+	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
 	la_top.use_angle_limitation = true
 	la_top.symmetry_limitation = true
 	la_top.primary_limit_angle = deg_to_rad(40.0)
 	la_top.secondary_limit_angle = deg_to_rad(25.0)
 	skeleton.add_child(la_top)
+	if _head_look_target:
+		la_top.target_node = la_top.get_path_to(_head_look_target)
 
 	_foot_ik_r = _make_foot_ik(skeleton, "FootIK_R", "leg_r_upper", "leg_r_fore", _foot_target_r)
 	_foot_ik_l = _make_foot_ik(skeleton, "FootIK_L", "leg_l_upper", "leg_l_fore", _foot_target_l)
@@ -363,9 +366,9 @@ func _make_foot_ik(skeleton: Skeleton3D, node_name: String,
 	ik.set_middle_bone_name(0, mid_bone)
 	ik.set_use_virtual_end(0, true)
 	ik.set_pole_direction(0, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
-	if target_marker:
-		ik.set_target_node(0, skeleton.get_path_to(target_marker))
 	skeleton.add_child(ik)
+	if target_marker:
+		ik.set_target_node(0, ik.get_path_to(target_marker))
 	return ik
 
 func _setup_fists() -> void:

@@ -23,6 +23,7 @@ var _segments: Dictionary = {}   # seg_name → VoxelSegment
 var _totals: Dictionary = {}     # seg_name → int (voxel count at initialize time)
 var _detached: Dictionary = {}   # seg_name → bool
 var _is_dead: bool = false
+var limb_system: LimbSystem = null  # optional; set after initialize() for integrity-driven color
 
 func initialize(seg_dict: Dictionary) -> void:
 	_segments = seg_dict
@@ -33,36 +34,46 @@ func initialize(seg_dict: Dictionary) -> void:
 		if seg != null:
 			_totals[seg_name] = seg.total_voxel_count
 			seg.detached.connect(_on_segment_detached.bind(seg_name))
+	_refresh()  # paint HUD bar immediately at game start
 
 func on_hit(_seg: VoxelSegment) -> void:
 	_refresh()
 
 func get_segment_health_fraction(seg_name: String) -> float:
-	if _detached.get(seg_name, false):
-		return 0.0
 	var seg: VoxelSegment = _segments.get(seg_name)
+	if _detached.get(seg_name, false) or (seg != null and seg.is_detached):
+		return 0.0
 	if seg == null:
 		return 1.0
 	var total: int = _totals.get(seg_name, 1)
 	if total == 0:
 		return 1.0
-	return float(seg.current_voxel_count) / float(total)
+	var voxel_frac := float(seg.flesh_voxel_count) / float(total)
+	if limb_system != null:
+		return minf(voxel_frac, limb_system.get_integrity(seg_name))
+	return voxel_frac
+
+func get_segment_is_broken(seg_name: String) -> bool:
+	var seg: VoxelSegment = _segments.get(seg_name)
+	if seg == null:
+		return false
+	return seg.is_broken and not seg.is_detached
 
 func _compute_hp() -> float:
 	var damage := 0.0
 	for seg_name in WEIGHTS:
 		var weight := float(WEIGHTS[seg_name])
-		if _detached.get(seg_name, false):
+		var seg: VoxelSegment = _segments.get(seg_name)
+		if _detached.get(seg_name, false) or (seg != null and seg.is_detached):
 			damage += weight
-		else:
-			var seg: VoxelSegment = _segments.get(seg_name)
-			if seg == null:
-				continue
-			var total: int = _totals.get(seg_name, 0)
-			if total == 0:
-				continue
-			var lost := 1.0 - float(seg.current_voxel_count) / float(total)
-			damage += weight * lost
+			continue
+		if seg == null:
+			continue
+		var total: int = _totals.get(seg_name, 0)
+		if total == 0:
+			continue
+		var lost := 1.0 - float(seg.flesh_voxel_count) / float(total)
+		damage += weight * lost
 	return maxf(0.0, MAX_HP - damage)
 
 func _refresh() -> void:

@@ -143,29 +143,32 @@ func _build_dummy() -> void:
 
 
 func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
-	var look_path := skeleton.get_path_to(_head_look_target) if _head_look_target else NodePath("")
+	# add_child() first, then get_path_to() from the modifier — NodePath properties
+	# resolve relative to the node that owns them, not their parent.
 
 	var la_bottom := LookAtModifier3D.new()
 	la_bottom.name = "LookAt_head_bottom"
 	la_bottom.bone_name = "head_bottom"
-	la_bottom.target_node = look_path
-	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z
+	la_bottom.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
 	la_bottom.use_angle_limitation = true
 	la_bottom.symmetry_limitation = true
 	la_bottom.primary_limit_angle = deg_to_rad(60.0)
 	la_bottom.secondary_limit_angle = deg_to_rad(40.0)
 	skeleton.add_child(la_bottom)
+	if _head_look_target:
+		la_bottom.target_node = la_bottom.get_path_to(_head_look_target)
 
 	var la_top := LookAtModifier3D.new()
 	la_top.name = "LookAt_head_top"
 	la_top.bone_name = "head_top"
-	la_top.target_node = look_path
-	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_MINUS_Z
+	la_top.forward_axis = SkeletonModifier3D.BONE_AXIS_PLUS_Z
 	la_top.use_angle_limitation = true
 	la_top.symmetry_limitation = true
 	la_top.primary_limit_angle = deg_to_rad(40.0)
 	la_top.secondary_limit_angle = deg_to_rad(25.0)
 	skeleton.add_child(la_top)
+	if _head_look_target:
+		la_top.target_node = la_top.get_path_to(_head_look_target)
 
 	# Dummy foot IK always active (always grounded)
 	var foot_r := Marker3D.new()
@@ -181,8 +184,8 @@ func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
 	ik_r.set_middle_bone_name(0, "leg_r_fore")
 	ik_r.set_use_virtual_end(0, true)
 	ik_r.set_pole_direction(0, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
-	ik_r.set_target_node(0, skeleton.get_path_to(foot_r))
 	skeleton.add_child(ik_r)
+	ik_r.set_target_node(0, ik_r.get_path_to(foot_r))
 	var ik_l := TwoBoneIK3D.new()
 	ik_l.name = "FootIK_L"
 	ik_l.setting_count = 1
@@ -190,8 +193,8 @@ func _setup_skeleton_modifiers(skeleton: Skeleton3D) -> void:
 	ik_l.set_middle_bone_name(0, "leg_l_fore")
 	ik_l.set_use_virtual_end(0, true)
 	ik_l.set_pole_direction(0, SkeletonModifier3D.SECONDARY_DIRECTION_PLUS_Z)
-	ik_l.set_target_node(0, skeleton.get_path_to(foot_l))
 	skeleton.add_child(ik_l)
+	ik_l.set_target_node(0, ik_l.get_path_to(foot_l))
 
 
 func _die() -> void:

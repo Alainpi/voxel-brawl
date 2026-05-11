@@ -4,10 +4,14 @@
 class_name AnimTreeSetup
 
 static func build_and_activate(anim_tree: AnimationTree, anim_player: AnimationPlayer) -> void:
+	# Force loop on all locomotion and additive clips — GLB import defaults to no-loop.
+	for clip in ["idle_a", "idle_b", "idle_c", "walk", "run", "walk_back",
+			"strafe_l", "strafe_r", "breathe_idle"]:
+		if anim_player.has_animation(clip):
+			anim_player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 	anim_tree.anim_player = anim_tree.get_path_to(anim_player)
 	anim_tree.tree_root = _build_blend_tree()
 	anim_tree.active = true
-	# Set breathe additive blend amount to always-on
 	anim_tree.set("parameters/breathe_add/add_amount", 1.0)
 
 static func _build_blend_tree() -> AnimationNodeBlendTree:
@@ -15,24 +19,35 @@ static func _build_blend_tree() -> AnimationNodeBlendTree:
 
 	# 1. BlendSpace2D for locomotion
 	var loco := AnimationNodeBlendSpace2D.new()
-	loco.auto_triangles = true
+	loco.auto_triangles = false  # manual triangles avoid Delaunay degeneracy on collinear Y-axis points
 	loco.min_space = Vector2(-1.0, -1.0)
 	loco.max_space = Vector2(1.0, 1.0)
 	loco.x_label = "strafe"
 	loco.y_label = "fwd_speed"
 
-	# (0,0): idle state machine — round-robins idle_a/b/c at end of each clip
-	loco.add_blend_point(_build_idle_sm(), Vector2(0.0, 0.0))
+	# Blend points — indices matter for add_triangle() calls below:
+	# 0: idle_a (0,0)
+	# 1: walk (0,0.5)   2: run (0,1.0)   3: walk_back (0,-1.0)
+	# 4: strafe_l (-1,0)   5: strafe_r (1,0)
+	# 6: walk_diag_l (-1,0.5)   7: walk_diag_r (1,0.5)
+	_add_clip(loco, &"idle_a",    Vector2( 0.0,  0.0))
+	_add_clip(loco, &"walk",      Vector2( 0.0,  0.5))
+	_add_clip(loco, &"run",       Vector2( 0.0,  1.0))
+	_add_clip(loco, &"walk_back", Vector2( 0.0, -1.0))
+	_add_clip(loco, &"strafe_l",  Vector2(-1.0,  0.0))
+	_add_clip(loco, &"strafe_r",  Vector2( 1.0,  0.0))
+	_add_clip(loco, &"walk",      Vector2(-1.0,  0.5))
+	_add_clip(loco, &"walk",      Vector2( 1.0,  0.5))
 
-	# Forward/back/strafe clips
-	_add_clip(loco, "walk",      Vector2( 0.0,  0.5))
-	_add_clip(loco, "run",       Vector2( 0.0,  1.0))
-	_add_clip(loco, "walk_back", Vector2( 0.0, -1.0))
-	_add_clip(loco, "strafe_l",  Vector2(-1.0,  0.0))
-	_add_clip(loco, "strafe_r",  Vector2( 1.0,  0.0))
-	# Diagonal corners: blend between walk and strafe
-	_add_clip(loco, "walk",      Vector2(-1.0,  0.5))
-	_add_clip(loco, "walk",      Vector2( 1.0,  0.5))
+	# 8 triangles covering the full space
+	loco.add_triangle(0, 1, 4)  # idle-walk-strafe_l
+	loco.add_triangle(0, 1, 5)  # idle-walk-strafe_r
+	loco.add_triangle(0, 3, 4)  # idle-walk_back-strafe_l
+	loco.add_triangle(0, 3, 5)  # idle-walk_back-strafe_r
+	loco.add_triangle(1, 2, 6)  # walk-run-walk_diag_l
+	loco.add_triangle(1, 2, 7)  # walk-run-walk_diag_r
+	loco.add_triangle(1, 4, 6)  # walk-strafe_l-walk_diag_l
+	loco.add_triangle(1, 5, 7)  # walk-strafe_r-walk_diag_r
 
 	# 2. Breathe additive source
 	var breathe_anim := AnimationNodeAnimation.new()
@@ -59,37 +74,3 @@ static func _add_clip(bs: AnimationNodeBlendSpace2D, clip: StringName, pos: Vect
 	var node := AnimationNodeAnimation.new()
 	node.animation = clip
 	bs.add_blend_point(node, pos)
-
-static func _build_idle_sm() -> AnimationNodeStateMachine:
-	var sm := AnimationNodeStateMachine.new()
-	# NESTED so it can live inside the BlendSpace2D blend point
-	sm.state_machine_type = AnimationNodeStateMachine.STATE_MACHINE_TYPE_NESTED
-
-	_add_idle_clip(sm, &"idle_a")
-	_add_idle_clip(sm, &"idle_b")
-	_add_idle_clip(sm, &"idle_c")
-
-	# Round-robin: lowest priority wins → a→b→c→a deterministic cycle.
-	# Each clip plays once (break_loop_at_end), then auto-advances.
-	_link(sm, &"idle_a", &"idle_b", 1)
-	_link(sm, &"idle_a", &"idle_c", 2)
-	_link(sm, &"idle_b", &"idle_c", 1)
-	_link(sm, &"idle_b", &"idle_a", 2)
-	_link(sm, &"idle_c", &"idle_a", 1)
-	_link(sm, &"idle_c", &"idle_b", 2)
-
-	return sm
-
-static func _add_idle_clip(sm: AnimationNodeStateMachine, clip: StringName) -> void:
-	var node := AnimationNodeAnimation.new()
-	node.animation = clip
-	sm.add_node(clip, node)
-
-static func _link(sm: AnimationNodeStateMachine, from: StringName, to: StringName, priority: int) -> void:
-	var t := AnimationNodeStateMachineTransition.new()
-	t.switch_mode = AnimationNodeStateMachineTransition.SWITCH_MODE_AT_END
-	t.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
-	t.break_loop_at_end = true
-	t.xfade_time = 0.4
-	t.priority = priority
-	sm.add_transition(from, to, t)

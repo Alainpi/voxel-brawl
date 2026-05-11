@@ -6,46 +6,32 @@ extends CanvasLayer
 @onready var weapon_label: Label = $WeaponLabel
 @onready var stance_indicator: HudStanceIndicator = $HudStanceIndicator
 @onready var pickup_prompt: Label = $PickupPrompt
+@onready var _hp_bar: ProgressBar = $HpBar
 
 var _crosshair: Control
-var _hp_bar: ProgressBar = null
-var _silhouette_rects: Dictionary = {}   # region_name → ColorRect
-
-const SILHOUETTE_REGIONS: Dictionary = {
-	"head":   ["head_bottom", "head_top"],
-	"chest":  ["torso_bottom", "torso_top"],
-	"arm_l":  ["arm_l_upper", "arm_l_fore"],
-	"arm_r":  ["arm_r_upper", "arm_r_fore"],
-	"hand_l": ["hand_l"],
-	"hand_r": ["hand_r"],
-	"leg_l":  ["leg_l_upper", "leg_l_fore"],
-	"leg_r":  ["leg_r_upper", "leg_r_fore"],
-}
+var _silhouette_rects: Dictionary = {}   # seg_name → ColorRect
 
 func _ready() -> void:
 	reload_label.visible = false
 	update_ammo(6, 6)
+
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(0.2, 0.8, 0.2)
+	_hp_bar.add_theme_stylebox_override("fill", fill)
 
 	_crosshair = load("res://scripts/crosshair.gd").new()
 	_crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_crosshair)
 
-	_hp_bar = ProgressBar.new()
-	_hp_bar.name = "HpBar"
-	_hp_bar.min_value = 0.0
-	_hp_bar.max_value = 100.0
-	_hp_bar.value = 100.0
-	_hp_bar.show_percentage = false
-	add_child(_hp_bar)
-	_hp_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_hp_bar.position = Vector2(16.0, -36.0)
-	_hp_bar.size = Vector2(200.0, 20.0)
-
-	var sil := _build_silhouette()
-	add_child(sil)
-	sil.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	sil.position = Vector2(16.0, -136.0)
+	# Populate silhouette rect references from scene nodes
+	var sil := $BodySilhouette
+	for seg_name in ["head_top", "head_bottom", "arm_l_upper", "torso_top", "arm_r_upper",
+			"arm_l_fore", "torso_bottom", "arm_r_fore", "hand_l", "leg_l_upper",
+			"leg_r_upper", "hand_r", "leg_l_fore", "leg_r_fore"]:
+		var rect := sil.get_node_or_null(seg_name)
+		if rect is ColorRect:
+			_silhouette_rects[seg_name] = rect
 
 func recoil(kick: float = 16.0, recovery: float = 0.188) -> void:
 	_crosshair.recoil(kick, recovery)
@@ -68,51 +54,19 @@ func hide_pickup_prompt() -> void:
 	pickup_prompt.visible = false
 
 func update_health(current: float, maximum: float) -> void:
-	if _hp_bar == null:
-		return
 	_hp_bar.max_value = maximum
 	_hp_bar.value = current
 
 func update_body_silhouette(health_system: HealthSystem) -> void:
-	for region_name in SILHOUETTE_REGIONS:
-		var segs: Array = SILHOUETTE_REGIONS[region_name]
-		var total_frac := 0.0
-		for seg_name in segs:
-			total_frac += health_system.get_segment_health_fraction(seg_name)
-		var avg_frac := total_frac / float(segs.size())
-		var rect: ColorRect = _silhouette_rects.get(region_name)
-		if rect != null:
-			rect.color = _fraction_to_color(avg_frac)
+	for seg_name in _silhouette_rects:
+		var frac    := health_system.get_segment_health_fraction(seg_name)
+		var broken  := health_system.get_segment_is_broken(seg_name)
+		_silhouette_rects[seg_name].color = _fraction_to_color(frac, broken)
 
-func _build_silhouette() -> Control:
-	var c := Control.new()
-	c.name = "BodySilhouette"
-	c.custom_minimum_size = Vector2(60.0, 90.0)
-	c.size = Vector2(60.0, 90.0)
-	# [region_name, x, y, width, height]
-	var layout := [
-		["head",    20,  0, 20, 20],
-		["chest",    8, 22, 44, 28],
-		["arm_l",    0, 22,  8, 28],
-		["arm_r",   52, 22,  8, 28],
-		["hand_l",   0, 52,  8, 12],
-		["hand_r",  52, 52,  8, 12],
-		["leg_l",   10, 52, 17, 38],
-		["leg_r",   33, 52, 17, 38],
-	]
-	for entry in layout:
-		var r := ColorRect.new()
-		r.name = entry[0]
-		r.position = Vector2(float(entry[1]), float(entry[2]))
-		r.size = Vector2(float(entry[3]), float(entry[4]))
-		r.color = Color(0.2, 0.8, 0.2)
-		c.add_child(r)
-		_silhouette_rects[entry[0]] = r
-	return c
-
-func _fraction_to_color(f: float) -> Color:
-	if f <= 0.0:  return Color(0.3, 0.3, 0.3)   # grey  — gone
-	if f < 0.25:  return Color(0.8, 0.1, 0.1)   # red   — critical
-	if f < 0.50:  return Color(0.9, 0.5, 0.1)   # orange
-	if f < 0.75:  return Color(0.9, 0.8, 0.1)   # yellow
-	return        Color(0.2, 0.8, 0.2)           # green — healthy
+func _fraction_to_color(f: float, is_broken: bool) -> Color:
+	if f <= 0.0:   return Color(0.32, 0.32, 0.32)  # grey          — severed/gone
+	if is_broken:  return Color(0.90, 0.08, 0.08)  # bright red    — broken/ragdolling
+	if f < 0.25:   return Color(0.85, 0.10, 0.10)  # red           — critical
+	if f < 0.50:   return Color(0.90, 0.50, 0.10)  # orange        — damaged
+	if f < 0.75:   return Color(0.45, 0.85, 0.15)  # lighter green — minor damage
+	return         Color(0.20, 0.78, 0.20)          # green         — healthy
